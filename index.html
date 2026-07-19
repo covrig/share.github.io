@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SHARE IMAGE</title>
+  <!-- heic2any library for HEIC/HEIF decoding -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #000000;
+      --card-bg: #161618;
+      --accent-color: #3880ff;
+      --accent-glow: rgba(56, 128, 255, 0.4);
+      --success-color: #30d158;
+      --success-glow: rgba(48, 209, 88, 0.4);
+      --text-main: #ffffff;
+      --text-sub: #8e8e93;
+      --border-color: #2c2c2e;
+      --btn-inactive-bg: #0c0c0e;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 12px 12px 85px 12px;
+      overflow-y: hidden;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding: 0 4px;
+    }
+
+    h1 {
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .subtitle {
+      color: var(--text-sub);
+      font-size: 12px;
+      display: block;
+    }
+
+    .btn-refresh {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .btn-refresh:active {
+      background: var(--border-color);
+      transform: scale(0.96);
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .drop-zone {
+      border: 1.5px dashed var(--accent-color);
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+      background: rgba(56, 128, 255, 0.05);
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .drop-zone:active {
+      background: rgba(56, 128, 255, 0.18);
+    }
+
+    .drop-zone-text {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent-color);
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr; /* Gave more width to Scale to fit 4 buttons */
+      gap: 8px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 4px;
+      background: #000000;
+      padding: 5px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-option {
+      flex: 1;
+      background: var(--btn-inactive-bg);
+      border: 1px solid transparent;
+      color: #636366;
+      padding: 10px 2px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .btn-option.active {
+      background: var(--accent-color);
+      color: #ffffff;
+      font-weight: 700;
+      border: 1px solid #66a0ff;
+      box-shadow: 0 2px 10px var(--accent-glow);
+      transform: scale(1.02);
+    }
+
+    /* 3-Column Scrollable Preview Grid */
+    .thumb-grid-container {
+      min-height: 335px;
+      max-height: 335px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 2px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .empty-state {
+      color: var(--text-sub);
+      font-size: 13px;
+      width: 100%;
+      text-align: center;
+      padding: 25px 0;
+    }
+
+    #thumbGrid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      width: 100%;
+    }
+
+    .thumb-wrapper {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #000000;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+
+    .thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .thumb-ext {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.8);
+      font-size: 10px;
+      font-weight: 700;
+      text-align: center;
+      padding: 3px 0;
+      color: #ffffff;
+      text-transform: uppercase;
+    }
+
+    /* Fixed Bottom Action Bar */
+    .action-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.92);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border-color);
+    }
+
+    .btn-action {
+      width: 100%;
+      background: var(--accent-color);
+      color: #ffffff;
+      border: none;
+      padding: 15px;
+      font-size: 16px;
+      font-weight: 700;
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 4px 14px var(--accent-glow);
+      transition: all 0.2s;
+    }
+
+    /* Green state when files are processed and ready to share instantly */
+    .btn-action.ready-state {
+      background: var(--success-color);
+      box-shadow: 0 4px 14px var(--success-glow);
+      color: #000000;
+    }
+
+    .btn-action:disabled {
+      background: var(--border-color);
+      color: #555558;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    /* Loader */
+    #loader {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 999;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .spinner {
+      width: 42px;
+      height: 42px;
+      border: 3px solid var(--border-color);
+      border-top-color: var(--accent-color);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>QUICK SHARE</h1>
+    </div>
+    <button class="btn-refresh" onclick="resetApp()" title="Reset Application">
+      <span>🔄</span> Refresh
+    </button>
+  </div>
+
+  <div class="card" style="margin-bottom: 8px;">
+    <input type="file" id="fileInput" multiple accept="image/*,.heic,.heif" style="display: none;">
+    <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+      <span style="font-size: 20px;">📷</span>
+      <span class="drop-zone-text">Tap to Select Images</span>
+    </div>
+  </div>
+
+  <!-- Side-by-Side Controls with 100% Option -->
+  <div class="controls-grid">
+    <div class="card">
+      <div class="card-title">Scale Size</div>
+      <div class="button-group" id="sizeGroup">
+        <button class="btn-option" onclick="setScale(0.25, this)">25%</button>
+        <button class="btn-option active" onclick="setScale(0.50, this)">50%</button>
+        <button class="btn-option" onclick="setScale(0.75, this)">75%</button>
+        <button class="btn-option" onclick="setScale(1.00, this)">100%</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Format</div>
+      <div class="button-group" id="formatGroup">
+        <button class="btn-option active" onclick="setFormat('image/jpeg', this)">JPG</button>
+        <button class="btn-option" onclick="setFormat('original', this)">Orig</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" id="previewTitle">Selected Previews (0)</div>
+    <div class="thumb-grid-container">
+      <div class="empty-state" id="emptyState">No images selected yet</div>
+      <div id="thumbGrid" style="display: none;"></div>
+    </div>
+  </div>
+
+  <!-- Two-Stage Action Button -->
+  <div class="action-bar">
+    <button class="btn-action" id="actionButton" disabled onclick="handleActionClick()">
+      Select Images First
+    </button>
+  </div>
+
+  <div id="loader">
+    <div class="spinner"></div>
+    <div id="loaderText" style="font-weight: 600; font-size: 15px;">Processing...</div>
+  </div>
+
+  <script>
+    let selectedFiles = [];
+    let processedFilesCache = [];
+    let currentScale = 0.50;
+    let currentFormat = 'image/jpeg';
+    let thumbObjectUrls = [];
+    let isProcessed = false;
+
+    const fileInput = document.getElementById('fileInput');
+    const previewTitle = document.getElementById('previewTitle');
+    const thumbGrid = document.getElementById('thumbGrid');
+    const emptyState = document.getElementById('emptyState');
+    const actionButton = document.getElementById('actionButton');
+    const loader = document.getElementById('loader');
+    const loaderText = document.getElementById('loaderText');
+
+    function setScale(scale, el) {
+      currentScale = scale;
+      document.querySelectorAll('#sizeGroup .btn-option').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      invalidateProcessedCache(); // Option changed, must re-process before sharing
+    }
+
+    function setFormat(format, el) {
+      currentFormat = format;
+      document.querySelectorAll('#formatGroup .btn-option').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      invalidateProcessedCache(); // Option changed, must re-process before sharing
+    }
+
+    function invalidateProcessedCache() {
+      if (selectedFiles.length > 0) {
+        isProcessed = false;
+        processedFilesCache = [];
+        actionButton.classList.remove('ready-state');
+        actionButton.innerText = `⚡ Process Images (${selectedFiles.length})`;
+      }
+    }
+
+    function resetApp() {
+      clearOldThumbUrls();
+      selectedFiles = [];
+      processedFilesCache = [];
+      isProcessed = false;
+      fileInput.value = '';
+      emptyState.style.display = 'block';
+      thumbGrid.style.display = 'none';
+      thumbGrid.innerHTML = '';
+      previewTitle.innerText = 'Selected Previews (0)';
+      actionButton.disabled = true;
+      actionButton.classList.remove('ready-state');
+      actionButton.innerText = 'Select Images First';
+      
+      setScale(0.50, document.querySelectorAll('#sizeGroup .btn-option')[1]);
+      setFormat('image/jpeg', document.querySelectorAll('#formatGroup .btn-option')[0]);
+    }
+
+    function clearOldThumbUrls() {
+      thumbObjectUrls.forEach(url => URL.revokeObjectURL(url));
+      thumbObjectUrls = [];
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      clearOldThumbUrls();
+      selectedFiles = Array.from(e.target.files);
+      
+      if (selectedFiles.length > 0) {
+        emptyState.style.display = 'none';
+        thumbGrid.style.display = 'grid';
+        thumbGrid.innerHTML = '';
+        previewTitle.innerText = `Selected Previews (${selectedFiles.length})`;
+        actionButton.disabled = false;
+        invalidateProcessedCache();
+
+        selectedFiles.forEach(file => {
+          const ext = file.name.split('.').pop().substring(0, 4);
+          const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+
+          const wrap = document.createElement('div');
+          wrap.className = 'thumb-wrapper';
+          
+          const img = document.createElement('img');
+          img.className = 'thumb';
+          img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" fill="%232c2c2e"><rect width="120" height="120"/></svg>';
+          
+          const badge = document.createElement('div');
+          badge.className = 'thumb-ext';
+          badge.innerText = ext;
+
+          wrap.appendChild(img);
+          wrap.appendChild(badge);
+          thumbGrid.appendChild(wrap);
+
+          if (isHeic) {
+            heic2any({ blob: file, toType: 'image/jpeg', quality: 0.2 })
+              .then(res => {
+                const thumbBlob = Array.isArray(res) ? res[0] : res;
+                const url = URL.createObjectURL(thumbBlob);
+                thumbObjectUrls.push(url);
+                img.src = url;
+              })
+              .catch(() => { badge.innerText = "ERR"; });
+          } else {
+            const url = URL.createObjectURL(file);
+            thumbObjectUrls.push(url);
+            img.src = url;
+          }
+        });
+      } else {
+        resetApp();
+      }
+    });
+
+    function loadImage(blob) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
+    // Handles which action to execute based on state
+    async function handleActionClick() {
+      if (!isProcessed) {
+        await processAllImages();
+      } else {
+        await shareNow();
+      }
+    }
+
+    // Stage 1: Process Images in background without breaking browser gesture limits
+    async function processAllImages() {
+      if (selectedFiles.length === 0) return;
+      loader.style.display = 'flex';
+      processedFilesCache = [];
+
+      try {
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          loaderText.innerText = `Processing ${i + 1} of ${selectedFiles.length}...`;
+
+          // Yield 50ms to Firefox so garbage collection runs and prevents UI freezing/crashing
+          await new Promise(r => setTimeout(r, 50));
+
+          try {
+            let sourceBlob = file;
+            const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+
+            // Determine target mime type
+            let targetMime = currentFormat === 'original' ? file.type : 'image/jpeg';
+            if (!targetMime || isHeic || targetMime.includes('heic') || targetMime.includes('heif')) {
+              targetMime = 'image/jpeg';
+            }
+
+            let finalBlob = null;
+
+            // Optimization: If 100% scale AND format isn't changing, skip the heavy canvas rendering
+            if (currentScale === 1.0 && !isHeic && (currentFormat === 'original' || file.type === targetMime)) {
+              finalBlob = file;
+            } else {
+              // Convert HEIC first if needed
+              if (isHeic) {
+                const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.95 });
+                sourceBlob = Array.isArray(converted) ? converted[0] : converted;
+              }
+
+              // Load to canvas for resizing/re-encoding
+              const img = await loadImage(sourceBlob);
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.max(1, Math.round(img.width * currentScale));
+              canvas.height = Math.max(1, Math.round(img.height * currentScale));
+
+              const ctx = canvas.getContext('2d');
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+              finalBlob = await new Promise(res => canvas.toBlob(res, targetMime, 0.88));
+
+              // Memory cleanup: Force destroy canvas buffer immediately
+              canvas.width = 0;
+              canvas.height = 0;
+            }
+
+            let ext = targetMime.split('/')[1] || 'jpg';
+            if (ext === 'jpeg') ext = 'jpg';
+            const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            const newFileName = `${baseName}_${currentScale * 100}pct.${ext}`;
+
+            processedFilesCache.push(new File([finalBlob], newFileName, { type: targetMime }));
+          } catch (err) {
+            console.error(`Error processing file ${file.name}:`, err);
+            // Continues to next image instead of freezing the app!
+          }
+        }
+
+        loader.style.display = 'none';
+        isProcessed = true;
+
+        // Change button to green Ready State!
+        actionButton.classList.add('ready-state');
+        actionButton.innerText = `📤 Open Share Sheet (${processedFilesCache.length} Ready)`;
+
+      } catch (error) {
+        loader.style.display = 'none';
+        alert("Error during image processing: " + error.message);
+      }
+    }
+
+    // Stage 2: Synchronous Share execution triggered directly by user gesture
+    async function shareNow() {
+      if (processedFilesCache.length === 0) return;
+
+      if (navigator.canShare && navigator.canShare({ files: processedFilesCache })) {
+        try {
+          await navigator.share({
+            files: processedFilesCache,
+            title: 'Resized Images',
+            text: 'Here are your resized images.'
+          });
+        } catch (err) {
+          // Ignore AbortError (happens when user manually closes Android share sheet without sending)
+          if (err.name !== 'AbortError') {
+            alert("Share failed: " + err.message);
+          }
+        }
+      } else {
+        alert("Direct sharing blocked by browser permissions. Downloading images instead.");
+        processedFilesCache.forEach(file => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(file);
+          a.download = file.name;
+          a.click();
+        });
+      }
+    }
+  </script>
+</body>
+</html>
