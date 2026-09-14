@@ -14,7 +14,6 @@ Users can select multiple images, preview them as thumbnails, choose the desired
 * Converts processed images to the selected output format.
 * Allows HEIC/HEIF files and decodes them using `libheif-js`.
 * Removes all EXIF metadata for all converted images.
-* Share or download options
-
+* Share or download options.
 
 The application is designed to provide a simple, privacy-friendly way to convert and resize images directly in the browser, with particular support for HEIC photographs commonly produced by modern smartphones.
