@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>SHARE IMAGE</title>
-  <!-- heic2any library for HEIC/HEIF decoding -->
-  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <!-- High-Performance WebAssembly HEIC/HEIF decoder -->
+  <script src="https://cdn.jsdelivr.net/npm/libheif-js@1.23.2/libheif-wasm/libheif-bundle.js"></script>
   <style>
     :root {
       --bg-color: #000000;
@@ -47,12 +47,6 @@
       font-size: 19px;
       font-weight: 700;
       letter-spacing: -0.3px;
-    }
-
-    .subtitle {
-      color: var(--text-sub);
-      font-size: 12px;
-      display: block;
     }
 
     .btn-refresh {
@@ -116,12 +110,23 @@
 
     .controls-grid {
       display: grid;
-      grid-template-columns: 1.3fr 0.7fr; /* Gave more width to Scale to fit 4 buttons */
+      grid-template-columns: 1fr;
       gap: 8px;
     }
 
-    .button-group {
-      display: flex;
+    .scale-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      background: #000000;
+      padding: 5px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    .format-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
       gap: 4px;
       background: #000000;
       padding: 5px;
@@ -130,7 +135,6 @@
     }
 
     .btn-option {
-      flex: 1;
       background: var(--btn-inactive-bg);
       border: 1px solid transparent;
       color: #636366;
@@ -152,10 +156,9 @@
       transform: scale(1.02);
     }
 
-    /* 3-Column Scrollable Preview Grid */
     .thumb-grid-container {
-      min-height: 335px;
-      max-height: 335px;
+      min-height: 290px;
+      max-height: 290px;
       overflow-y: auto;
       overflow-x: hidden;
       padding: 2px;
@@ -208,7 +211,6 @@
       text-transform: uppercase;
     }
 
-    /* Fixed Bottom Action Bar */
     .action-bar {
       position: fixed;
       bottom: 0;
@@ -237,7 +239,6 @@
       transition: all 0.2s;
     }
 
-    /* Green state when files are processed and ready to share instantly */
     .btn-action.ready-state {
       background: var(--success-color);
       box-shadow: 0 4px 14px var(--success-glow);
@@ -251,7 +252,6 @@
       cursor: not-allowed;
     }
 
-    /* Loader */
     #loader {
       display: none;
       position: fixed;
@@ -285,25 +285,27 @@
       <h1>QUICK SHARE</h1>
     </div>
     <button class="btn-refresh" onclick="resetApp()" title="Reset Application">
-      <span>🔄</span> Refresh
+      <span>↺</span> Refresh
     </button>
   </div>
 
   <div class="card" style="margin-bottom: 8px;">
     <input type="file" id="fileInput" multiple accept="image/*,.heic,.heif" style="display: none;">
     <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
-      <span style="font-size: 20px;">📷</span>
+      <span style="font-size: 20px;">🖼️</span>
       <span class="drop-zone-text">Tap to Select Images</span>
     </div>
   </div>
 
-  <!-- Side-by-Side Controls with 100% Option -->
   <div class="controls-grid">
+    <!-- Scale Options: 25, 40, 50 (default), 60, 75, 100 -->
     <div class="card">
       <div class="card-title">Scale Size</div>
-      <div class="button-group" id="sizeGroup">
+      <div class="scale-row" id="sizeGroup">
         <button class="btn-option" onclick="setScale(0.25, this)">25%</button>
+        <button class="btn-option" onclick="setScale(0.40, this)">40%</button>
         <button class="btn-option active" onclick="setScale(0.50, this)">50%</button>
+        <button class="btn-option" onclick="setScale(0.60, this)">60%</button>
         <button class="btn-option" onclick="setScale(0.75, this)">75%</button>
         <button class="btn-option" onclick="setScale(1.00, this)">100%</button>
       </div>
@@ -311,7 +313,7 @@
 
     <div class="card">
       <div class="card-title">Format</div>
-      <div class="button-group" id="formatGroup">
+      <div class="format-row" id="formatGroup">
         <button class="btn-option active" onclick="setFormat('image/jpeg', this)">JPG</button>
         <button class="btn-option" onclick="setFormat('original', this)">Orig</button>
       </div>
@@ -326,7 +328,6 @@
     </div>
   </div>
 
-  <!-- Two-Stage Action Button -->
   <div class="action-bar">
     <button class="btn-action" id="actionButton" disabled onclick="handleActionClick()">
       Select Images First
@@ -341,7 +342,7 @@
   <script>
     let selectedFiles = [];
     let processedFilesCache = [];
-    let currentScale = 0.50;
+    let currentScale = 0.50; // Default 50%
     let currentFormat = 'image/jpeg';
     let thumbObjectUrls = [];
     let isProcessed = false;
@@ -358,14 +359,14 @@
       currentScale = scale;
       document.querySelectorAll('#sizeGroup .btn-option').forEach(b => b.classList.remove('active'));
       el.classList.add('active');
-      invalidateProcessedCache(); // Option changed, must re-process before sharing
+      invalidateProcessedCache();
     }
 
     function setFormat(format, el) {
       currentFormat = format;
       document.querySelectorAll('#formatGroup .btn-option').forEach(b => b.classList.remove('active'));
       el.classList.add('active');
-      invalidateProcessedCache(); // Option changed, must re-process before sharing
+      invalidateProcessedCache();
     }
 
     function invalidateProcessedCache() {
@@ -373,7 +374,7 @@
         isProcessed = false;
         processedFilesCache = [];
         actionButton.classList.remove('ready-state');
-        actionButton.innerText = `⚡ Process Images (${selectedFiles.length})`;
+        actionButton.innerText = `⚙ Process Images (${selectedFiles.length})`;
       }
     }
 
@@ -391,7 +392,9 @@
       actionButton.classList.remove('ready-state');
       actionButton.innerText = 'Select Images First';
       
-      setScale(0.50, document.querySelectorAll('#sizeGroup .btn-option')[1]);
+      // Reset to 50% default
+      const defaultScaleBtn = document.querySelectorAll('#sizeGroup .btn-option')[2];
+      if (defaultScaleBtn) setScale(0.50, defaultScaleBtn);
       setFormat('image/jpeg', document.querySelectorAll('#formatGroup .btn-option')[0]);
     }
 
@@ -400,7 +403,35 @@
       thumbObjectUrls = [];
     }
 
-    fileInput.addEventListener('change', (e) => {
+    // High-performance libheif decoding function
+    async function decodeHeicToCanvas(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const decoder = new libheif.HeifDecoder();
+      const images = decoder.decode(arrayBuffer);
+      if (!images || !images.length) throw new Error("Could not decode HEIC image.");
+
+      const image = images[0];
+      const width = image.get_width();
+      const height = image.get_height();
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.createImageData(width, height);
+
+      await new Promise((resolve, reject) => {
+        image.display(imageData, (displayData) => {
+          if (!displayData) return reject(new Error('HEIF display error'));
+          resolve();
+        });
+      });
+
+      ctx.putImageData(imageData, 0, 0);
+      return { canvas, width, height };
+    }
+
+    fileInput.addEventListener('change', async (e) => {
       clearOldThumbUrls();
       selectedFiles = Array.from(e.target.files);
       
@@ -412,7 +443,7 @@
         actionButton.disabled = false;
         invalidateProcessedCache();
 
-        selectedFiles.forEach(file => {
+        selectedFiles.forEach((file) => {
           const ext = file.name.split('.').pop().substring(0, 4);
           const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
 
@@ -432,14 +463,25 @@
           thumbGrid.appendChild(wrap);
 
           if (isHeic) {
-            heic2any({ blob: file, toType: 'image/jpeg', quality: 0.2 })
-              .then(res => {
-                const thumbBlob = Array.isArray(res) ? res[0] : res;
-                const url = URL.createObjectURL(thumbBlob);
-                thumbObjectUrls.push(url);
-                img.src = url;
-              })
-              .catch(() => { badge.innerText = "ERR"; });
+            // Fast non-blocking WASM thumbnail rendering
+            decodeHeicToCanvas(file).then(({ canvas, width, height }) => {
+              const thumbCanvas = document.createElement('canvas');
+              thumbCanvas.width = 160;
+              thumbCanvas.height = Math.round((height / width) * 160);
+              const tCtx = thumbCanvas.getContext('2d');
+              tCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+              
+              thumbCanvas.toBlob(blob => {
+                if (blob) {
+                  const url = URL.createObjectURL(blob);
+                  thumbObjectUrls.push(url);
+                  img.src = url;
+                }
+                // Memory cleanup
+                canvas.width = 0; canvas.height = 0;
+                thumbCanvas.width = 0; thumbCanvas.height = 0;
+              }, 'image/jpeg', 0.6);
+            }).catch(() => { badge.innerText = "ERR"; });
           } else {
             const url = URL.createObjectURL(file);
             thumbObjectUrls.push(url);
@@ -451,17 +493,6 @@
       }
     });
 
-    function loadImage(blob) {
-      return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(blob);
-        const img = new Image();
-        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-        img.onerror = reject;
-        img.src = url;
-      });
-    }
-
-    // Handles which action to execute based on state
     async function handleActionClick() {
       if (!isProcessed) {
         await processAllImages();
@@ -470,7 +501,6 @@
       }
     }
 
-    // Stage 1: Process Images in background without breaking browser gesture limits
     async function processAllImages() {
       if (selectedFiles.length === 0) return;
       loader.style.display = 'flex';
@@ -481,65 +511,72 @@
           const file = selectedFiles[i];
           loaderText.innerText = `Processing ${i + 1} of ${selectedFiles.length}...`;
 
-          // Yield 50ms to Firefox so garbage collection runs and prevents UI freezing/crashing
-          await new Promise(r => setTimeout(r, 50));
+          // Give browser micro-tasks time to update UI and run GC
+          await new Promise(r => setTimeout(r, 16));
 
-          try {
-            let sourceBlob = file;
-            const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
-
-            // Determine target mime type
-            let targetMime = currentFormat === 'original' ? file.type : 'image/jpeg';
-            if (!targetMime || isHeic || targetMime.includes('heic') || targetMime.includes('heif')) {
-              targetMime = 'image/jpeg';
-            }
-
-            let finalBlob = null;
-
-            // Optimization: If 100% scale AND format isn't changing, skip the heavy canvas rendering
-            if (currentScale === 1.0 && !isHeic && (currentFormat === 'original' || file.type === targetMime)) {
-              finalBlob = file;
-            } else {
-              // Convert HEIC first if needed
-              if (isHeic) {
-                const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.95 });
-                sourceBlob = Array.isArray(converted) ? converted[0] : converted;
-              }
-
-              // Load to canvas for resizing/re-encoding
-              const img = await loadImage(sourceBlob);
-              const canvas = document.createElement('canvas');
-              canvas.width = Math.max(1, Math.round(img.width * currentScale));
-              canvas.height = Math.max(1, Math.round(img.height * currentScale));
-
-              const ctx = canvas.getContext('2d');
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = 'high';
-              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-              finalBlob = await new Promise(res => canvas.toBlob(res, targetMime, 0.88));
-
-              // Memory cleanup: Force destroy canvas buffer immediately
-              canvas.width = 0;
-              canvas.height = 0;
-            }
-
-            let ext = targetMime.split('/')[1] || 'jpg';
-            if (ext === 'jpeg') ext = 'jpg';
-            const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-            const newFileName = `${baseName}_${currentScale * 100}pct.${ext}`;
-
-            processedFilesCache.push(new File([finalBlob], newFileName, { type: targetMime }));
-          } catch (err) {
-            console.error(`Error processing file ${file.name}:`, err);
-            // Continues to next image instead of freezing the app!
+          const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+          let targetMime = currentFormat === 'original' ? file.type : 'image/jpeg';
+          if (!targetMime || isHeic || targetMime.includes('heic') || targetMime.includes('heif')) {
+            targetMime = 'image/jpeg';
           }
+
+          let finalBlob = null;
+
+          // Pass-through optimization for 100% scale without re-encoding standard files
+          if (currentScale === 1.0 && !isHeic && (currentFormat === 'original' || file.type === targetMime)) {
+            finalBlob = file;
+          } else if (isHeic) {
+            // Fast HEIC WASM processing path
+            const { canvas, width, height } = await decodeHeicToCanvas(file);
+            const scaledCanvas = document.createElement('canvas');
+            scaledCanvas.width = Math.max(1, Math.round(width * currentScale));
+            scaledCanvas.height = Math.max(1, Math.round(height * currentScale));
+
+            const sCtx = scaledCanvas.getContext('2d');
+            sCtx.imageSmoothingEnabled = true;
+            sCtx.imageSmoothingQuality = 'high';
+            sCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+
+            finalBlob = await new Promise(res => scaledCanvas.toBlob(res, targetMime, 0.88));
+
+            // Immediate hardware memory cleanup
+            canvas.width = 0; canvas.height = 0;
+            scaledCanvas.width = 0; scaledCanvas.height = 0;
+          } else {
+            // Hardware-accelerated GPU pipeline via createImageBitmap for JPG/PNG/WEBP
+            const headerBmp = await createImageBitmap(file);
+            const targetW = Math.max(1, Math.round(headerBmp.width * currentScale));
+            const targetH = Math.max(1, Math.round(headerBmp.height * currentScale));
+            headerBmp.close();
+
+            const resizedBmp = await createImageBitmap(file, {
+              resizeWidth: targetW,
+              resizeHeight: targetH,
+              resizeQuality: 'high'
+            });
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(resizedBmp, 0, 0);
+            resizedBmp.close();
+
+            finalBlob = await new Promise(res => canvas.toBlob(res, targetMime, 0.88));
+            canvas.width = 0; canvas.height = 0;
+          }
+
+          let ext = targetMime.split('/')[1] || 'jpg';
+          if (ext === 'jpeg') ext = 'jpg';
+          const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+          const newFileName = `${baseName}_${Math.round(currentScale * 100)}pct.${ext}`;
+
+          processedFilesCache.push(new File([finalBlob], newFileName, { type: targetMime }));
         }
 
         loader.style.display = 'none';
         isProcessed = true;
 
-        // Change button to green Ready State!
         actionButton.classList.add('ready-state');
         actionButton.innerText = `📤 Open Share Sheet (${processedFilesCache.length} Ready)`;
 
@@ -549,7 +586,6 @@
       }
     }
 
-    // Stage 2: Synchronous Share execution triggered directly by user gesture
     async function shareNow() {
       if (processedFilesCache.length === 0) return;
 
@@ -561,13 +597,12 @@
             text: 'Here are your resized images.'
           });
         } catch (err) {
-          // Ignore AbortError (happens when user manually closes Android share sheet without sending)
           if (err.name !== 'AbortError') {
             alert("Share failed: " + err.message);
           }
         }
       } else {
-        alert("Direct sharing blocked by browser permissions. Downloading images instead.");
+        alert("Direct sharing unavailable. Downloading images...");
         processedFilesCache.forEach(file => {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(file);
