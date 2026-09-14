@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SHARE IMAGE</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <title>QUICK SHARE</title>
+
   <!-- High-Performance WebAssembly HEIC/HEIF decoder -->
   <script src="https://cdn.jsdelivr.net/npm/libheif-js@1.23.2/libheif-wasm/libheif-bundle.js"></script>
   <style>
@@ -282,7 +284,7 @@
 
   <div class="header">
     <div>
-      <h1>QUICK SHARE v.0.4</h1>
+      <h1>QUICK SHARE v.0.5</h1>
     </div>
     <button class="btn-refresh" onclick="resetApp()" title="Reset Application">
       <span>↺</span> Refresh
@@ -348,18 +350,17 @@
   let currentFormat = 'image/jpeg';
   let thumbObjectUrls = [];
   let isProcessed = false;
-  let totalOriginalSize = 0; // Added variable for size tracking
+  let totalOriginalSize = 0;
 
   const fileInput = document.getElementById('fileInput');
   const previewTitle = document.getElementById('previewTitle');
-  const sizeStats = document.getElementById('sizeStats'); // Added reference for stats
+  const sizeStats = document.getElementById('sizeStats');
   const thumbGrid = document.getElementById('thumbGrid');
   const emptyState = document.getElementById('emptyState');
   const actionButton = document.getElementById('actionButton');
   const loader = document.getElementById('loader');
   const loaderText = document.getElementById('loaderText');
 
-  // Added helper function to format bytes into readable sizes
   function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -418,10 +419,6 @@
     thumbObjectUrls = [];
   }
 
-  // The HEIC decoder is backed by a WebAssembly module. window.libheif() is a
-  // factory that BUILDS A NEW WASM INSTANCE every time it's called — doing that
-  // once per photo (and again during processing) is the main reason large
-  // batches feel slow. We create it once, lazily, and reuse it for every decode.
   let heifModuleInstance = null;
   function getHeifModule() {
     if (!heifModuleInstance) {
@@ -430,6 +427,83 @@
     return heifModuleInstance;
   }
 
+  // Fast HEIC decoder specifically for small thumbnail generation
+  async function decodeHeicForThumbnail(buffer, targetSize = 240) {
+    const uint8Array = new Uint8Array(buffer);
+    const heif = getHeifModule();
+    const decoder = new heif.HeifDecoder();
+    const images = decoder.decode(uint8Array);
+
+    if (!images || !images.length) {
+      throw new Error("Could not decode HEIC image.");
+    }
+
+    const primaryImage = images[0];
+    let imageToDisplay = primaryImage;
+    let isThumbnail = false;
+
+    // Check if embedded low-res thumbnail is available in the file
+    try {
+      if (typeof primaryImage.get_thumbnails === 'function') {
+        const thumbs = primaryImage.get_thumbnails();
+        if (thumbs && thumbs.length > 0) {
+          imageToDisplay = thumbs[0];
+          isThumbnail = true;
+        }
+      }
+    } catch (e) {
+      imageToDisplay = primaryImage;
+    }
+
+    const width = imageToDisplay.get_width();
+    const height = imageToDisplay.get_height();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.createImageData(width, height);
+
+    await new Promise((resolve, reject) => {
+      imageToDisplay.display(imageData, (displayData) => {
+        if (!displayData) return reject(new Error('HEIF display error'));
+        resolve();
+      });
+    });
+
+    ctx.putImageData(imageData, 0, 0);
+
+    // Free WASM handles
+    if (isThumbnail && typeof imageToDisplay.free === 'function') {
+      imageToDisplay.free();
+    }
+    if (typeof primaryImage.free === 'function') {
+      primaryImage.free();
+    }
+    for (let i = 1; i < images.length; i++) {
+      if (typeof images[i].free === 'function') images[i].free();
+    }
+
+    // Downsample canvas to small thumbnail dimensions
+    if (width > targetSize || height > targetSize) {
+      const scale = Math.min(targetSize / width, targetSize / height);
+      const tw = Math.max(1, Math.round(width * scale));
+      const th = Math.max(1, Math.round(height * scale));
+
+      const thumbCanvas = document.createElement('canvas');
+      thumbCanvas.width = tw;
+      thumbCanvas.height = th;
+      const tCtx = thumbCanvas.getContext('2d');
+      tCtx.drawImage(canvas, 0, 0, tw, th);
+
+      canvas.width = 0; canvas.height = 0;
+      return thumbCanvas;
+    }
+
+    return canvas;
+  }
+
+  // Full-resolution HEIC decoder used ONLY when Process button is pressed
   async function decodeHeicBufferToCanvas(buffer) {
     const uint8Array = new Uint8Array(buffer);
     const heif = getHeifModule();
@@ -459,11 +533,44 @@
 
     ctx.putImageData(imageData, 0, 0);
 
-    // FREE WEBASSEMBLY MEMORY (the HeifDecoder itself has no free() in this
-    // libheif-js build — only decoded image objects need explicit cleanup)
-    image.free();
+    if (typeof image.free === 'function') image.free();
+    for (let i = 1; i < images.length; i++) {
+      if (typeof images[i].free === 'function') images[i].free();
+    }
 
     return { canvas, width, height };
+  }
+
+  // Helper for controlled concurrency
+  async function mapConcurrent(items, limit, fn) {
+    let index = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (index < items.length) {
+        const currentIndex = index++;
+        await fn(items[currentIndex], currentIndex);
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  async function loadHeicThumbnail(fileObj, imgElement, badgeElement) {
+    try {
+      const buffer = await fileObj.file.arrayBuffer();
+      const thumbCanvas = await decodeHeicForThumbnail(buffer, 240);
+
+      thumbCanvas.toBlob(blob => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          thumbObjectUrls.push(url);
+          imgElement.src = url;
+        }
+        thumbCanvas.width = 0;
+        thumbCanvas.height = 0;
+      }, 'image/jpeg', 0.7);
+    } catch (err) {
+      console.error("HEIC Thumbnail Error:", err);
+      badgeElement.innerText = "ERR";
+    }
   }
 
   fileInput.addEventListener('change', async (e) => {
@@ -474,27 +581,21 @@
       return;
     }
 
-    loader.style.display = 'flex';
-    loaderText.innerText = 'Loading file references...';
-
     selectedFiles = [];
     totalOriginalSize = 0; 
     
     for (const rawFile of rawFiles) {
       const isHeic = rawFile.name.toLowerCase().endsWith('.heic') || rawFile.name.toLowerCase().endsWith('.heif');
-      // Fix for iOS not assigning a MIME type to HEIC files
       const fileType = (isHeic && !rawFile.type) ? 'image/heic' : rawFile.type;
 
       selectedFiles.push({
         name: rawFile.name,
         type: fileType,
-        file: rawFile, // Store the File reference, NOT the ArrayBuffer
+        file: rawFile,
         isHeic: isHeic
       });
       totalOriginalSize += rawFile.size;
     }
-
-    loader.style.display = 'none';
 
     if (selectedFiles.length > 0) {
       emptyState.style.display = 'none';
@@ -504,7 +605,9 @@
       actionButton.disabled = false;
       invalidateProcessedCache();
 
-      selectedFiles.forEach(async (fileObj) => {
+      const heicQueue = [];
+
+      selectedFiles.forEach((fileObj) => {
         const ext = fileObj.name.split('.').pop().substring(0, 4);
         const wrap = document.createElement('div');
         wrap.className = 'thumb-wrapper';
@@ -522,49 +625,20 @@
         thumbGrid.appendChild(wrap);
 
         if (fileObj.isHeic) {
-          try {
-            // Only load the buffer into RAM exactly when needed for the thumbnail
-            const buffer = await fileObj.file.arrayBuffer();
-            const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
-            const thumbCanvas = document.createElement('canvas');
-            thumbCanvas.width = 160;
-            thumbCanvas.height = Math.round((height / width) * 160);
-            const tCtx = thumbCanvas.getContext('2d');
-            tCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
-
-            // Cache the full-res decode as a JPEG blob so the processing step
-            // (which needs the pixels again at whatever export scale/format
-            // the user picks) doesn't have to run the slow WASM HEIC decode
-            // a second time. Native browser JPEG decode+resize afterwards is
-            // much faster than another libheif pass.
-            canvas.toBlob(blob => {
-              if (blob) {
-                fileObj.heicPreviewBlob = blob;
-                fileObj.heicPreviewWidth = width;
-                fileObj.heicPreviewHeight = height;
-              }
-            }, 'image/jpeg', 0.92);
-            
-            thumbCanvas.toBlob(blob => {
-              if (blob) {
-                const url = URL.createObjectURL(blob);
-                thumbObjectUrls.push(url);
-                img.src = url;
-              }
-              canvas.width = 0; canvas.height = 0;
-              thumbCanvas.width = 0; thumbCanvas.height = 0;
-            }, 'image/jpeg', 0.6);
-          } catch (err) {
-            console.error("HEIC Thumbnail Error:", err);
-            badge.innerText = "ERR";
-          }
+          heicQueue.push({ fileObj, img, badge });
         } else {
-          // Standard images can use the File object directly
           const url = URL.createObjectURL(fileObj.file);
           thumbObjectUrls.push(url);
           img.src = url;
         }
       });
+
+      // Process HEIC thumbnails with concurrency limit of 2
+      if (heicQueue.length > 0) {
+        mapConcurrent(heicQueue, 2, async (item) => {
+          await loadHeicThumbnail(item.fileObj, item.img, item.badge);
+        });
+      }
     } else {
       resetApp();
     }
@@ -589,59 +663,38 @@
         loaderText.innerText = `Processing ${i + 1} of ${selectedFiles.length}...`;
         await new Promise(r => setTimeout(r, 16));
 
-	    const isHeic = fileObj.isHeic;
+        const isHeic = fileObj.isHeic;
         let targetMime = currentFormat === 'original' ? fileObj.type : 'image/jpeg';
         if (!targetMime || isHeic || targetMime.includes('heic') || targetMime.includes('heif')) {
           targetMime = 'image/jpeg';
         }
 
         let finalBlob = null;
-        const sourceBlob = fileObj.file; // Use the File directly
+        const sourceBlob = fileObj.file;
 
         if (currentScale === 1.0 && !isHeic && (currentFormat === 'original' || fileObj.type === targetMime)) {
           finalBlob = sourceBlob;
         } else if (isHeic) {
-          if (fileObj.heicPreviewBlob) {
-            // Already decoded once during thumbnail generation — reuse that
-            // instead of running the slow WASM HEIC decode again. The browser's
-            // native (hardware-accelerated) JPEG decoder + resize handles this
-            // fast, same path used for standard images below.
-            const targetW = Math.max(1, Math.round(fileObj.heicPreviewWidth * currentScale));
-            const targetH = Math.max(1, Math.round(fileObj.heicPreviewHeight * currentScale));
+          // Decode full resolution HEIC only on process request
+          const buffer = await sourceBlob.arrayBuffer();
+          const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
 
-            const resizedBmp = await createImageBitmap(fileObj.heicPreviewBlob, {
-              resizeWidth: targetW,
-              resizeHeight: targetH,
-              resizeQuality: 'high'
-            });
+          const targetW = Math.max(1, Math.round(width * currentScale));
+          const targetH = Math.max(1, Math.round(height * currentScale));
 
-            const canvas = document.createElement('canvas');
-            canvas.width = targetW;
-            canvas.height = targetH;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(resizedBmp, 0, 0);
-            resizedBmp.close();
+          const scaledCanvas = document.createElement('canvas');
+          scaledCanvas.width = targetW;
+          scaledCanvas.height = targetH;
 
-            finalBlob = await new Promise(res => canvas.toBlob(res, targetMime, 0.88));
-            canvas.width = 0; canvas.height = 0;
-          } else {
-            // Fallback: no cached preview (e.g. thumbnail decode failed) —
-            // fall back to a fresh full decode.
-            const buffer = await sourceBlob.arrayBuffer(); // Read into RAM only when needed
-            const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
-            const scaledCanvas = document.createElement('canvas');
-            scaledCanvas.width = Math.max(1, Math.round(width * currentScale));
-            scaledCanvas.height = Math.max(1, Math.round(height * currentScale));
+          const sCtx = scaledCanvas.getContext('2d');
+          sCtx.imageSmoothingEnabled = true;
+          sCtx.imageSmoothingQuality = 'high';
+          sCtx.drawImage(canvas, 0, 0, targetW, targetH);
 
-            const sCtx = scaledCanvas.getContext('2d');
-            sCtx.imageSmoothingEnabled = true;
-            sCtx.imageSmoothingQuality = 'high';
-            sCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+          finalBlob = await new Promise(res => scaledCanvas.toBlob(res, targetMime, 0.88));
 
-            finalBlob = await new Promise(res => scaledCanvas.toBlob(res, targetMime, 0.88));
-            canvas.width = 0; canvas.height = 0;
-            scaledCanvas.width = 0; scaledCanvas.height = 0;
-          }
+          canvas.width = 0; canvas.height = 0;
+          scaledCanvas.width = 0; scaledCanvas.height = 0;
         } else {
           const headerBmp = await createImageBitmap(sourceBlob);
           const targetW = Math.max(1, Math.round(headerBmp.width * currentScale));
@@ -676,7 +729,6 @@
       loader.style.display = 'none';
       isProcessed = true;
 
-      // Update the converted size in the UI
       const totalConvertedSize = processedFilesCache.reduce((acc, f) => acc + f.size, 0);
       sizeStats.innerText = `Orig: ${formatBytes(totalOriginalSize)} | Conv: ${formatBytes(totalConvertedSize)}`;
 
@@ -708,7 +760,6 @@
           text: 'Here are your resized images.'
         });
       } catch (err) {
-        // Ignore AbortError (user closed the share sheet)
         if (err.name !== 'AbortError') {
           alert(`Sharing failed: ${err.message}\n\nPlease try selecting fewer pictures.`);
         }
