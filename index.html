@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SHARE IMAGE</title>
+  <title>SHARE IMAGE2</title>
   <!-- High-Performance WebAssembly HEIC/HEIF decoder -->
   <script src="https://cdn.jsdelivr.net/npm/libheif-js@1.23.2/libheif-wasm/libheif-bundle.js"></script>
   <style>
@@ -282,7 +282,7 @@
 
   <div class="header">
     <div>
-      <h1>QUICK SHARE</h1>
+      <h1>QUICK SHARE v.2</h1>
     </div>
     <button class="btn-refresh" onclick="resetApp()" title="Reset Application">
       <span>↺</span> Refresh
@@ -320,7 +320,10 @@
   </div>
 
   <div class="card">
-    <div class="card-title" id="previewTitle">Selected Previews (0)</div>
+    <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+      <span id="previewTitle">Selected Previews (0)</span>
+      <span id="sizeStats" style="text-transform: none; font-weight: 500; font-size: 11px; color: var(--text-sub);"></span>
+    </div>
     <div class="thumb-grid-container">
       <div class="empty-state" id="emptyState">No images selected yet</div>
       <div id="thumbGrid" style="display: none;"></div>
@@ -339,20 +342,31 @@
   </div>
 
 <script>
-  let selectedFiles = []; // Will store { name, type, buffer } instead of raw stale File references
+  let selectedFiles = []; 
   let processedFilesCache = [];
   let currentScale = 0.50; 
   let currentFormat = 'image/jpeg';
   let thumbObjectUrls = [];
   let isProcessed = false;
+  let totalOriginalSize = 0; // Added variable for size tracking
 
   const fileInput = document.getElementById('fileInput');
   const previewTitle = document.getElementById('previewTitle');
+  const sizeStats = document.getElementById('sizeStats'); // Added reference for stats
   const thumbGrid = document.getElementById('thumbGrid');
   const emptyState = document.getElementById('emptyState');
   const actionButton = document.getElementById('actionButton');
   const loader = document.getElementById('loader');
   const loaderText = document.getElementById('loaderText');
+
+  // Added helper function to format bytes into readable sizes
+  function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
 
   function setScale(scale, el) {
     currentScale = scale;
@@ -374,6 +388,7 @@
       processedFilesCache = [];
       actionButton.classList.remove('ready-state');
       actionButton.innerText = `⚙ Process Images (${selectedFiles.length})`;
+      sizeStats.innerText = `Orig: ${formatBytes(totalOriginalSize)} | Conv: --`;
     }
   }
 
@@ -382,11 +397,13 @@
     selectedFiles = [];
     processedFilesCache = [];
     isProcessed = false;
+    totalOriginalSize = 0;
     fileInput.value = '';
     emptyState.style.display = 'block';
     thumbGrid.style.display = 'none';
     thumbGrid.innerHTML = '';
     previewTitle.innerText = 'Selected Previews (0)';
+    sizeStats.innerText = '';
     actionButton.disabled = true;
     actionButton.classList.remove('ready-state');
     actionButton.innerText = 'Select Images First';
@@ -407,7 +424,10 @@
     const decoder = new heif.HeifDecoder();
     const images = decoder.decode(uint8Array);
     
-    if (!images || !images.length) throw new Error("Could not decode HEIC image.");
+    if (!images || !images.length) {
+      decoder.free();
+      throw new Error("Could not decode HEIC image.");
+    }
 
     const image = images[0];
     const width = image.get_width();
@@ -427,10 +447,14 @@
     });
 
     ctx.putImageData(imageData, 0, 0);
+
+    // FREE WEBASSEMBLY MEMORY
+    image.free();
+    decoder.free();
+
     return { canvas, width, height };
   }
 
-  // File Selection: Immediately read ArrayBuffers to avoid permission expiration
   fileInput.addEventListener('change', async (e) => {
     clearOldThumbUrls();
     const rawFiles = Array.from(e.target.files);
@@ -440,20 +464,23 @@
     }
 
     loader.style.display = 'flex';
-    loaderText.innerText = 'Loading files into memory...';
+    loaderText.innerText = 'Loading file references...';
 
     selectedFiles = [];
+    totalOriginalSize = 0; 
+    
     for (const rawFile of rawFiles) {
-      try {
-        const buffer = await rawFile.arrayBuffer();
-        selectedFiles.push({
-          name: rawFile.name,
-          type: rawFile.type,
-          buffer: buffer
-        });
-      } catch (err) {
-        console.error("Failed to buffer file:", rawFile.name, err);
-      }
+      const isHeic = rawFile.name.toLowerCase().endsWith('.heic') || rawFile.name.toLowerCase().endsWith('.heif');
+      // Fix for iOS not assigning a MIME type to HEIC files
+      const fileType = (isHeic && !rawFile.type) ? 'image/heic' : rawFile.type;
+
+      selectedFiles.push({
+        name: rawFile.name,
+        type: fileType,
+        file: rawFile, // Store the File reference, NOT the ArrayBuffer
+        isHeic: isHeic
+      });
+      totalOriginalSize += rawFile.size;
     }
 
     loader.style.display = 'none';
@@ -466,10 +493,8 @@
       actionButton.disabled = false;
       invalidateProcessedCache();
 
-      selectedFiles.forEach((fileObj) => {
+      selectedFiles.forEach(async (fileObj) => {
         const ext = fileObj.name.split('.').pop().substring(0, 4);
-        const isHeic = fileObj.name.toLowerCase().endsWith('.heic') || fileObj.name.toLowerCase().endsWith('.heif');
-
         const wrap = document.createElement('div');
         wrap.className = 'thumb-wrapper';
         
@@ -485,8 +510,11 @@
         wrap.appendChild(badge);
         thumbGrid.appendChild(wrap);
 
-        if (isHeic) {
-          decodeHeicBufferToCanvas(fileObj.buffer).then(({ canvas, width, height }) => {
+        if (fileObj.isHeic) {
+          try {
+            // Only load the buffer into RAM exactly when needed for the thumbnail
+            const buffer = await fileObj.file.arrayBuffer();
+            const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
             const thumbCanvas = document.createElement('canvas');
             thumbCanvas.width = 160;
             thumbCanvas.height = Math.round((height / width) * 160);
@@ -502,13 +530,13 @@
               canvas.width = 0; canvas.height = 0;
               thumbCanvas.width = 0; thumbCanvas.height = 0;
             }, 'image/jpeg', 0.6);
-          }).catch((err) => { 
+          } catch (err) {
             console.error("HEIC Thumbnail Error:", err);
-            badge.innerText = "ERR"; 
-          });
+            badge.innerText = "ERR";
+          }
         } else {
-          const blob = new Blob([fileObj.buffer], { type: fileObj.type });
-          const url = URL.createObjectURL(blob);
+          // Standard images can use the File object directly
+          const url = URL.createObjectURL(fileObj.file);
           thumbObjectUrls.push(url);
           img.src = url;
         }
@@ -537,19 +565,20 @@
         loaderText.innerText = `Processing ${i + 1} of ${selectedFiles.length}...`;
         await new Promise(r => setTimeout(r, 16));
 
-        const isHeic = fileObj.name.toLowerCase().endsWith('.heic') || fileObj.name.toLowerCase().endsWith('.heif');
+	    const isHeic = fileObj.isHeic;
         let targetMime = currentFormat === 'original' ? fileObj.type : 'image/jpeg';
         if (!targetMime || isHeic || targetMime.includes('heic') || targetMime.includes('heif')) {
           targetMime = 'image/jpeg';
         }
 
         let finalBlob = null;
-        const sourceBlob = new Blob([fileObj.buffer], { type: fileObj.type || targetMime });
+        const sourceBlob = fileObj.file; // Use the File directly
 
         if (currentScale === 1.0 && !isHeic && (currentFormat === 'original' || fileObj.type === targetMime)) {
           finalBlob = sourceBlob;
         } else if (isHeic) {
-          const { canvas, width, height } = await decodeHeicBufferToCanvas(fileObj.buffer);
+          const buffer = await sourceBlob.arrayBuffer(); // Read into RAM only when needed
+          const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
           const scaledCanvas = document.createElement('canvas');
           scaledCanvas.width = Math.max(1, Math.round(width * currentScale));
           scaledCanvas.height = Math.max(1, Math.round(height * currentScale));
@@ -596,6 +625,10 @@
       loader.style.display = 'none';
       isProcessed = true;
 
+      // Update the converted size in the UI
+      const totalConvertedSize = processedFilesCache.reduce((acc, f) => acc + f.size, 0);
+      sizeStats.innerText = `Orig: ${formatBytes(totalOriginalSize)} | Conv: ${formatBytes(totalConvertedSize)}`;
+
       actionButton.classList.add('ready-state');
       actionButton.innerText = `📤 Open Share Sheet (${processedFilesCache.length} Ready)`;
 
@@ -608,18 +641,15 @@
   async function shareNow() {
     if (processedFilesCache.length === 0) return;
 
-    // Calculate total payload size
     const totalBytes = processedFilesCache.reduce((acc, f) => acc + f.size, 0);
-    const maxShareFiles = 10;
-    const maxShareBytes = 25 * 1024 * 1024; // 25 MB
+    const maxShareFiles = 50;
+    const maxShareBytes = 100 * 1024 * 1024; // 100 MB
 
-    // Use Web Share API only if file count and payload size are within native safety limits
-    const canNativeShare = navigator.canShare && 
-                           navigator.canShare({ files: processedFilesCache }) && 
-                           processedFilesCache.length <= maxShareFiles && 
-                           totalBytes <= maxShareBytes;
+    const supportsFileShare = !!(navigator.canShare && navigator.canShare({ files: processedFilesCache }));
+    const withinFileLimit = processedFilesCache.length <= maxShareFiles;
+    const withinSizeLimit = totalBytes <= maxShareBytes;
 
-    if (canNativeShare) {
+    if (supportsFileShare && withinFileLimit && withinSizeLimit) {
       try {
         await navigator.share({
           files: processedFilesCache,
@@ -627,29 +657,23 @@
           text: 'Here are your resized images.'
         });
       } catch (err) {
+        // Ignore AbortError (user closed the share sheet)
         if (err.name !== 'AbortError') {
-          triggerFallbackDownload("Share blocked by system. Downloading files...");
+          alert(`Sharing failed: ${err.message}\n\nPlease try selecting fewer pictures.`);
         }
       }
     } else {
-      const reason = processedFilesCache.length > maxShareFiles 
-        ? `Batch has too many items (${processedFilesCache.length} files, max 10 for native share).`
-        : `Batch size (${(totalBytes / (1024 * 1024)).toFixed(1)}MB) exceeds native share limit (~25MB).`;
+      let reason = "Direct sharing unavailable.";
+      if (!supportsFileShare) {
+        reason = "Your browser or device does not support native file sharing for these files.";
+      } else if (!withinFileLimit) {
+        reason = `Too many items (${processedFilesCache.length} files selected).`;
+      } else if (!withinSizeLimit) {
+        reason = `Batch size is too large (${(totalBytes / (1024 * 1024)).toFixed(1)}MB).`;
+      }
       
-      triggerFallbackDownload(`${reason} Downloading files directly...`);
+      alert(`${reason}\n\nPlease try selecting fewer pictures and try again.`);
     }
-  }
-
-  function triggerFallbackDownload(msg) {
-    alert(msg);
-    processedFilesCache.forEach((file, index) => {
-      setTimeout(() => {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(file);
-        a.download = file.name;
-        a.click();
-      }, index * 200); // Stagger downloads to prevent browser blocking
-    });
   }
 </script>
 </body>
