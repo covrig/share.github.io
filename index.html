@@ -298,7 +298,6 @@
   </div>
 
   <div class="controls-grid">
-    <!-- Scale Options: 25, 40, 50 (default), 60, 75, 100 -->
     <div class="card">
       <div class="card-title">Scale Size</div>
       <div class="scale-row" id="sizeGroup">
@@ -406,8 +405,15 @@
     // High-performance libheif decoding function
     async function decodeHeicToCanvas(file) {
       const arrayBuffer = await file.arrayBuffer();
-      const decoder = new libheif.HeifDecoder();
-      const images = decoder.decode(arrayBuffer);
+      const uint8Array = new Uint8Array(arrayBuffer);
+      
+      // 1. Initialize the module first
+	  const heif = window.libheif();
+
+	  // 2. Instantiate the decoder from the initialized module
+	  const decoder = new heif.HeifDecoder();
+      const images = decoder.decode(uint8Array);
+      
       if (!images || !images.length) throw new Error("Could not decode HEIC image.");
 
       const image = images[0];
@@ -481,7 +487,10 @@
                 canvas.width = 0; canvas.height = 0;
                 thumbCanvas.width = 0; thumbCanvas.height = 0;
               }, 'image/jpeg', 0.6);
-            }).catch(() => { badge.innerText = "ERR"; });
+            }).catch((err) => { 
+              console.error("HEIC Thumbnail Error for", file.name, ":", err);
+              badge.innerText = "ERR"; 
+            });
           } else {
             const url = URL.createObjectURL(file);
             thumbObjectUrls.push(url);
