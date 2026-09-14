@@ -8,6 +8,9 @@
 
   <!-- High-Performance WebAssembly HEIC/HEIF decoder -->
   <script src="https://cdn.jsdelivr.net/npm/libheif-js@1.23.2/libheif-wasm/libheif-bundle.js"></script>
+  <!-- JSZip for ZIP archive downloads -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
   <style>
     :root {
       --bg-color: #000000;
@@ -33,8 +36,10 @@
     body {
       background-color: var(--bg-color);
       color: var(--text-main);
-      padding: 12px 12px 85px 12px;
-      overflow-y: hidden;
+      padding: 12px 12px 95px 12px;
+      max-width: 520px;
+      margin: 0 auto;
+      position: relative;
     }
 
     .header {
@@ -118,7 +123,7 @@
 
     .scale-row {
       display: grid;
-      grid-template-columns: repeat(6, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 4px;
       background: #000000;
       padding: 5px;
@@ -165,6 +170,15 @@
       overflow-x: hidden;
       padding: 2px;
       -webkit-overflow-scrolling: touch;
+      transition: max-height 0.2s ease, min-height 0.2s ease;
+    }
+
+    /* Larger height for Desktop / Wide screens */
+    @media (min-width: 520px) {
+      .thumb-grid-container {
+        min-height: 640px;
+        max-height: 640px;
+      }
     }
 
     .empty-state {
@@ -216,12 +230,21 @@
     .action-bar {
       position: fixed;
       bottom: 0;
-      left: 0;
-      right: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 520px;
       padding: 12px;
       background: rgba(0, 0, 0, 0.92);
       backdrop-filter: blur(10px);
       border-top: 1px solid var(--border-color);
+      z-index: 100;
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
     }
 
     .btn-action {
@@ -230,7 +253,7 @@
       color: #ffffff;
       border: none;
       padding: 15px;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       border-radius: 14px;
       cursor: pointer;
@@ -245,6 +268,17 @@
       background: var(--success-color);
       box-shadow: 0 4px 14px var(--success-glow);
       color: #000000;
+    }
+
+    .btn-action.btn-secondary {
+      background: #2c2c2e;
+      color: #ffffff;
+      box-shadow: none;
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-action.btn-secondary:active {
+      background: #3a3a3c;
     }
 
     .btn-action:disabled {
@@ -284,7 +318,7 @@
 
   <div class="header">
     <div>
-      <h1>QUICK SHARE v.0.5</h1>
+      <h1>QUICK SHARE v.0.6</h1>
     </div>
     <button class="btn-refresh" onclick="resetApp()" title="Reset Application">
       <span>↺</span> Refresh
@@ -306,7 +340,6 @@
         <button class="btn-option" onclick="setScale(0.25, this)">25%</button>
         <button class="btn-option" onclick="setScale(0.40, this)">40%</button>
         <button class="btn-option active" onclick="setScale(0.50, this)">50%</button>
-        <button class="btn-option" onclick="setScale(0.60, this)">60%</button>
         <button class="btn-option" onclick="setScale(0.75, this)">75%</button>
         <button class="btn-option" onclick="setScale(1.00, this)">100%</button>
       </div>
@@ -316,7 +349,7 @@
       <div class="card-title">Format</div>
       <div class="format-row" id="formatGroup">
         <button class="btn-option active" onclick="setFormat('image/jpeg', this)">JPG</button>
-        <button class="btn-option" onclick="setFormat('original', this)">Orig</button>
+        <button class="btn-option" onclick="setFormat('original', this)">ORIG</button>
       </div>
     </div>
   </div>
@@ -324,7 +357,7 @@
   <div class="card">
     <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
       <span id="previewTitle">Selected Previews (0)</span>
-      <span id="sizeStats" style="text-transform: none; font-weight: 500; font-size: 11px; color: var(--text-sub);"></span>
+      <span id="sizeStats" style="text-transform: none; font-weight: 500; font-size: 11px;"></span>
     </div>
     <div class="thumb-grid-container">
       <div class="empty-state" id="emptyState">No images selected yet</div>
@@ -333,9 +366,19 @@
   </div>
 
   <div class="action-bar">
-    <button class="btn-action" id="actionButton" disabled onclick="handleActionClick()">
-      Select Images First
-    </button>
+    <div id="singleActionContainer">
+      <button class="btn-action" id="actionButton" disabled onclick="handleActionClick()">
+        Select Images First
+      </button>
+    </div>
+    <div id="dualActionContainer" class="action-grid" style="display: none;">
+      <button class="btn-action btn-secondary" onclick="downloadAllZip()">
+        📦 Download ZIP
+      </button>
+      <button class="btn-action ready-state" onclick="shareNow()">
+        📤 Share
+      </button>
+    </div>
   </div>
 
   <div id="loader">
@@ -358,6 +401,8 @@
   const thumbGrid = document.getElementById('thumbGrid');
   const emptyState = document.getElementById('emptyState');
   const actionButton = document.getElementById('actionButton');
+  const singleActionContainer = document.getElementById('singleActionContainer');
+  const dualActionContainer = document.getElementById('dualActionContainer');
   const loader = document.getElementById('loader');
   const loaderText = document.getElementById('loaderText');
 
@@ -367,6 +412,21 @@
     const sizes = ['B', 'KB', 'MB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  function updateSizeStats(origBytes, convBytes = null) {
+    if (!origBytes) {
+      sizeStats.innerHTML = '';
+      return;
+    }
+    const origStr = `<span style="color: #ff9500; font-weight: 700;">${formatBytes(origBytes)}</span>`;
+    let convStr = '<span style="color: var(--text-sub); font-weight: 500;">--</span>';
+    
+    if (convBytes !== null) {
+      convStr = `<span style="color: #30d158; font-weight: 700;">${formatBytes(convBytes)}</span>`;
+    }
+
+    sizeStats.innerHTML = `Orig: ${origStr} | Conv: ${convStr}`;
   }
 
   function setScale(scale, el) {
@@ -387,9 +447,11 @@
     if (selectedFiles.length > 0) {
       isProcessed = false;
       processedFilesCache = [];
+      singleActionContainer.style.display = 'block';
+      dualActionContainer.style.display = 'none';
       actionButton.classList.remove('ready-state');
       actionButton.innerText = `⚙ Process Images (${selectedFiles.length})`;
-      sizeStats.innerText = `Orig: ${formatBytes(totalOriginalSize)} | Conv: --`;
+      updateSizeStats(totalOriginalSize, null);
     }
   }
 
@@ -404,12 +466,15 @@
     thumbGrid.style.display = 'none';
     thumbGrid.innerHTML = '';
     previewTitle.innerText = 'Selected Previews (0)';
-    sizeStats.innerText = '';
+    sizeStats.innerHTML = '';
+    
+    singleActionContainer.style.display = 'block';
+    dualActionContainer.style.display = 'none';
     actionButton.disabled = true;
     actionButton.classList.remove('ready-state');
     actionButton.innerText = 'Select Images First';
     
-    const defaultScaleBtn = document.querySelectorAll('#sizeGroup .btn-option')[2];
+    const defaultScaleBtn = document.querySelectorAll('#sizeGroup .btn-option')[2]; // 50%
     if (defaultScaleBtn) setScale(0.50, defaultScaleBtn);
     setFormat('image/jpeg', document.querySelectorAll('#formatGroup .btn-option')[0]);
   }
@@ -427,7 +492,6 @@
     return heifModuleInstance;
   }
 
-  // Fast HEIC decoder specifically for small thumbnail generation
   async function decodeHeicForThumbnail(buffer, targetSize = 240) {
     const uint8Array = new Uint8Array(buffer);
     const heif = getHeifModule();
@@ -442,7 +506,6 @@
     let imageToDisplay = primaryImage;
     let isThumbnail = false;
 
-    // Check if embedded low-res thumbnail is available in the file
     try {
       if (typeof primaryImage.get_thumbnails === 'function') {
         const thumbs = primaryImage.get_thumbnails();
@@ -473,7 +536,6 @@
 
     ctx.putImageData(imageData, 0, 0);
 
-    // Free WASM handles
     if (isThumbnail && typeof imageToDisplay.free === 'function') {
       imageToDisplay.free();
     }
@@ -484,7 +546,6 @@
       if (typeof images[i].free === 'function') images[i].free();
     }
 
-    // Downsample canvas to small thumbnail dimensions
     if (width > targetSize || height > targetSize) {
       const scale = Math.min(targetSize / width, targetSize / height);
       const tw = Math.max(1, Math.round(width * scale));
@@ -503,7 +564,6 @@
     return canvas;
   }
 
-  // Full-resolution HEIC decoder used ONLY when Process button is pressed
   async function decodeHeicBufferToCanvas(buffer) {
     const uint8Array = new Uint8Array(buffer);
     const heif = getHeifModule();
@@ -541,7 +601,6 @@
     return { canvas, width, height };
   }
 
-  // Helper for controlled concurrency
   async function mapConcurrent(items, limit, fn) {
     let index = 0;
     const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -633,7 +692,6 @@
         }
       });
 
-      // Process HEIC thumbnails with concurrency limit of 2
       if (heicQueue.length > 0) {
         mapConcurrent(heicQueue, 2, async (item) => {
           await loadHeicThumbnail(item.fileObj, item.img, item.badge);
@@ -647,8 +705,6 @@
   async function handleActionClick() {
     if (!isProcessed) {
       await processAllImages();
-    } else {
-      await shareNow();
     }
   }
 
@@ -672,10 +728,7 @@
         let finalBlob = null;
         const sourceBlob = fileObj.file;
 
-        if (currentScale === 1.0 && !isHeic && (currentFormat === 'original' || fileObj.type === targetMime)) {
-          finalBlob = sourceBlob;
-        } else if (isHeic) {
-          // Decode full resolution HEIC only on process request
+        if (isHeic) {
           const buffer = await sourceBlob.arrayBuffer();
           const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
 
@@ -730,14 +783,45 @@
       isProcessed = true;
 
       const totalConvertedSize = processedFilesCache.reduce((acc, f) => acc + f.size, 0);
-      sizeStats.innerText = `Orig: ${formatBytes(totalOriginalSize)} | Conv: ${formatBytes(totalConvertedSize)}`;
+      updateSizeStats(totalOriginalSize, totalConvertedSize);
 
-      actionButton.classList.add('ready-state');
-      actionButton.innerText = `📤 Open Share Sheet (${processedFilesCache.length} Ready)`;
+      singleActionContainer.style.display = 'none';
+      dualActionContainer.style.display = 'grid';
 
     } catch (error) {
       loader.style.display = 'none';
       alert("Error during image processing: " + error.message);
+    }
+  }
+
+  async function downloadAllZip() {
+    if (processedFilesCache.length === 0) return;
+
+    loader.style.display = 'flex';
+    loaderText.innerText = 'Creating ZIP archive...';
+    await new Promise(r => setTimeout(r, 16));
+
+    try {
+      const zip = new JSZip();
+      processedFilesCache.forEach(file => {
+        zip.file(file.name, file);
+      });
+
+      const zipContent = await zip.generateAsync({ type: "blob" });
+      const downloadUrl = URL.createObjectURL(zipContent);
+
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `QuickShare_${Math.round(currentScale * 100)}pct.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
+    } catch (err) {
+      alert("Failed to build ZIP archive: " + err.message);
+    } finally {
+      loader.style.display = 'none';
     }
   }
 
@@ -761,22 +845,25 @@
         });
       } catch (err) {
         if (err.name !== 'AbortError') {
-          alert(`Sharing failed: ${err.message}\n\nPlease try selecting fewer pictures.`);
+          alert(`Sharing failed: ${err.message}\n\nPlease try downloading as ZIP instead.`);
         }
       }
     } else {
       let reason = "Direct sharing unavailable.";
       if (!supportsFileShare) {
-        reason = "Your browser or device does not support native file sharing for these files.";
+        reason = "Your browser or device does not support native file sharing.";
       } else if (!withinFileLimit) {
         reason = `Too many items (${processedFilesCache.length} files selected).`;
       } else if (!withinSizeLimit) {
         reason = `Batch size is too large (${(totalBytes / (1024 * 1024)).toFixed(1)}MB).`;
       }
       
-      alert(`${reason}\n\nPlease try selecting fewer pictures and try again.`);
+      alert(`${reason}\n\nPlease use the 'Download ZIP' option.`);
     }
   }
+
+  // Ensure default state is restored on every fresh page load/reload
+  window.addEventListener('DOMContentLoaded', resetApp);
 </script>
 </body>
 </html>
