@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SHARE IMAGE2</title>
+  <title>SHARE IMAGE</title>
   <!-- High-Performance WebAssembly HEIC/HEIF decoder -->
   <script src="https://cdn.jsdelivr.net/npm/libheif-js@1.23.2/libheif-wasm/libheif-bundle.js"></script>
   <style>
@@ -282,7 +282,7 @@
 
   <div class="header">
     <div>
-      <h1>QUICK SHARE v.2</h1>
+      <h1>QUICK SHARE v.0.3</h1>
     </div>
     <button class="btn-refresh" onclick="resetApp()" title="Reset Application">
       <span>↺</span> Refresh
@@ -425,7 +425,6 @@
     const images = decoder.decode(uint8Array);
     
     if (!images || !images.length) {
-      decoder.free();
       throw new Error("Could not decode HEIC image.");
     }
 
@@ -448,9 +447,9 @@
 
     ctx.putImageData(imageData, 0, 0);
 
-    // FREE WEBASSEMBLY MEMORY
+    // FREE WEBASSEMBLY MEMORY (the HeifDecoder itself has no free() in this
+    // libheif-js build — only decoded image objects need explicit cleanup)
     image.free();
-    decoder.free();
 
     return { canvas, width, height };
   }
