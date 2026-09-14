@@ -282,7 +282,7 @@
 
   <div class="header">
     <div>
-      <h1>QUICK SHARE v.0.3</h1>
+      <h1>QUICK SHARE v.0.4</h1>
     </div>
     <button class="btn-refresh" onclick="resetApp()" title="Reset Application">
       <span>↺</span> Refresh
@@ -418,9 +418,21 @@
     thumbObjectUrls = [];
   }
 
+  // The HEIC decoder is backed by a WebAssembly module. window.libheif() is a
+  // factory that BUILDS A NEW WASM INSTANCE every time it's called — doing that
+  // once per photo (and again during processing) is the main reason large
+  // batches feel slow. We create it once, lazily, and reuse it for every decode.
+  let heifModuleInstance = null;
+  function getHeifModule() {
+    if (!heifModuleInstance) {
+      heifModuleInstance = window.libheif();
+    }
+    return heifModuleInstance;
+  }
+
   async function decodeHeicBufferToCanvas(buffer) {
     const uint8Array = new Uint8Array(buffer);
-    const heif = window.libheif();
+    const heif = getHeifModule();
     const decoder = new heif.HeifDecoder();
     const images = decoder.decode(uint8Array);
     
@@ -519,6 +531,19 @@
             thumbCanvas.height = Math.round((height / width) * 160);
             const tCtx = thumbCanvas.getContext('2d');
             tCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+
+            // Cache the full-res decode as a JPEG blob so the processing step
+            // (which needs the pixels again at whatever export scale/format
+            // the user picks) doesn't have to run the slow WASM HEIC decode
+            // a second time. Native browser JPEG decode+resize afterwards is
+            // much faster than another libheif pass.
+            canvas.toBlob(blob => {
+              if (blob) {
+                fileObj.heicPreviewBlob = blob;
+                fileObj.heicPreviewWidth = width;
+                fileObj.heicPreviewHeight = height;
+              }
+            }, 'image/jpeg', 0.92);
             
             thumbCanvas.toBlob(blob => {
               if (blob) {
@@ -576,20 +601,47 @@
         if (currentScale === 1.0 && !isHeic && (currentFormat === 'original' || fileObj.type === targetMime)) {
           finalBlob = sourceBlob;
         } else if (isHeic) {
-          const buffer = await sourceBlob.arrayBuffer(); // Read into RAM only when needed
-          const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
-          const scaledCanvas = document.createElement('canvas');
-          scaledCanvas.width = Math.max(1, Math.round(width * currentScale));
-          scaledCanvas.height = Math.max(1, Math.round(height * currentScale));
+          if (fileObj.heicPreviewBlob) {
+            // Already decoded once during thumbnail generation — reuse that
+            // instead of running the slow WASM HEIC decode again. The browser's
+            // native (hardware-accelerated) JPEG decoder + resize handles this
+            // fast, same path used for standard images below.
+            const targetW = Math.max(1, Math.round(fileObj.heicPreviewWidth * currentScale));
+            const targetH = Math.max(1, Math.round(fileObj.heicPreviewHeight * currentScale));
 
-          const sCtx = scaledCanvas.getContext('2d');
-          sCtx.imageSmoothingEnabled = true;
-          sCtx.imageSmoothingQuality = 'high';
-          sCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+            const resizedBmp = await createImageBitmap(fileObj.heicPreviewBlob, {
+              resizeWidth: targetW,
+              resizeHeight: targetH,
+              resizeQuality: 'high'
+            });
 
-          finalBlob = await new Promise(res => scaledCanvas.toBlob(res, targetMime, 0.88));
-          canvas.width = 0; canvas.height = 0;
-          scaledCanvas.width = 0; scaledCanvas.height = 0;
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(resizedBmp, 0, 0);
+            resizedBmp.close();
+
+            finalBlob = await new Promise(res => canvas.toBlob(res, targetMime, 0.88));
+            canvas.width = 0; canvas.height = 0;
+          } else {
+            // Fallback: no cached preview (e.g. thumbnail decode failed) —
+            // fall back to a fresh full decode.
+            const buffer = await sourceBlob.arrayBuffer(); // Read into RAM only when needed
+            const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
+            const scaledCanvas = document.createElement('canvas');
+            scaledCanvas.width = Math.max(1, Math.round(width * currentScale));
+            scaledCanvas.height = Math.max(1, Math.round(height * currentScale));
+
+            const sCtx = scaledCanvas.getContext('2d');
+            sCtx.imageSmoothingEnabled = true;
+            sCtx.imageSmoothingQuality = 'high';
+            sCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+
+            finalBlob = await new Promise(res => scaledCanvas.toBlob(res, targetMime, 0.88));
+            canvas.width = 0; canvas.height = 0;
+            scaledCanvas.width = 0; scaledCanvas.height = 0;
+          }
         } else {
           const headerBmp = await createImageBitmap(sourceBlob);
           const targetW = Math.max(1, Math.round(headerBmp.width * currentScale));
