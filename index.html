@@ -1,9 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" id="metaThemeColor" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Quick Share">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <title>QUICK SHARE</title>
 
   <!-- High-Performance WebAssembly HEIC/HEIF decoder -->
@@ -13,16 +20,57 @@
 
   <style>
     :root {
+      color-scheme: dark;
       --bg-color: #000000;
       --card-bg: #161618;
+      --inset-bg: #000000;
       --accent-color: #3880ff;
       --accent-glow: rgba(56, 128, 255, 0.4);
+      --accent-soft: rgba(56, 128, 255, 0.05);
+      --accent-soft-strong: rgba(56, 128, 255, 0.18);
       --success-color: #30d158;
       --success-glow: rgba(48, 209, 88, 0.4);
+      --danger-color: #ff453a;
+      --warn-color: #ff9500;
       --text-main: #ffffff;
       --text-sub: #8e8e93;
+      --text-faint: #636366;
       --border-color: #2c2c2e;
       --btn-inactive-bg: #0c0c0e;
+      --bar-bg: rgba(0, 0, 0, 0.92);
+      --overlay-bg: rgba(0, 0, 0, 0.85);
+      --track-bg: #2c2c2e;
+      --field-bg: #0c0c0e;
+      --secondary-bg: #2c2c2e;
+      --secondary-bg-active: #3a3a3c;
+      --thumb-bg: #000000;
+      --shadow-thumb: 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg-color: #f2f2f7;
+      --card-bg: #ffffff;
+      --inset-bg: #eceef2;
+      --accent-soft: rgba(56, 128, 255, 0.07);
+      --accent-soft-strong: rgba(56, 128, 255, 0.16);
+      --success-color: #248a3d;
+      --success-glow: rgba(36, 138, 61, 0.3);
+      --danger-color: #d70015;
+      --warn-color: #b25000;
+      --text-main: #000000;
+      --text-sub: #6e6e73;
+      --text-faint: #8a8a8f;
+      --border-color: #d5d5dc;
+      --btn-inactive-bg: #ffffff;
+      --bar-bg: rgba(255, 255, 255, 0.93);
+      --overlay-bg: rgba(242, 242, 247, 0.9);
+      --track-bg: #dcdce2;
+      --field-bg: #f2f2f7;
+      --secondary-bg: #e4e4ea;
+      --secondary-bg-active: #d5d5dc;
+      --thumb-bg: #eceef2;
+      --shadow-thumb: 0 1px 4px rgba(0, 0, 0, 0.12);
     }
 
     * {
@@ -36,7 +84,7 @@
     body {
       background-color: var(--bg-color);
       color: var(--text-main);
-      padding: 12px 12px 95px 12px;
+      padding: calc(12px + env(safe-area-inset-top)) 12px calc(100px + env(safe-area-inset-bottom)) 12px;
       max-width: 520px;
       margin: 0 auto;
       position: relative;
@@ -48,6 +96,7 @@
       align-items: center;
       margin-bottom: 10px;
       padding: 0 4px;
+      gap: 8px;
     }
 
     h1 {
@@ -56,7 +105,13 @@
       letter-spacing: -0.3px;
     }
 
-    .btn-refresh {
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-refresh, .btn-icon {
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       color: var(--text-main);
@@ -70,10 +125,18 @@
       cursor: pointer;
     }
 
-    .btn-refresh:active {
+    .btn-icon {
+      padding: 8px 10px;
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .btn-refresh:active, .btn-icon:active {
       background: var(--border-color);
       transform: scale(0.96);
     }
+
+    .btn-icon[hidden] { display: none; }
 
     .card {
       background-color: var(--card-bg);
@@ -97,16 +160,17 @@
       border-radius: 10px;
       padding: 14px;
       text-align: center;
-      background: rgba(56, 128, 255, 0.05);
+      background: var(--accent-soft);
       cursor: pointer;
       display: flex;
       justify-content: center;
       align-items: center;
       gap: 8px;
+      transition: background 0.15s ease;
     }
 
-    .drop-zone:active {
-      background: rgba(56, 128, 255, 0.18);
+    .drop-zone:active, .drop-zone.is-dragging {
+      background: var(--accent-soft-strong);
     }
 
     .drop-zone-text {
@@ -125,7 +189,7 @@
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 4px;
-      background: #000000;
+      background: var(--inset-bg);
       padding: 5px;
       border-radius: 12px;
       border: 1px solid var(--border-color);
@@ -135,7 +199,7 @@
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 4px;
-      background: #000000;
+      background: var(--inset-bg);
       padding: 5px;
       border-radius: 12px;
       border: 1px solid var(--border-color);
@@ -144,7 +208,7 @@
     .btn-option {
       background: var(--btn-inactive-bg);
       border: 1px solid transparent;
-      color: #636366;
+      color: var(--text-faint);
       padding: 10px 2px;
       font-size: 12px;
       font-weight: 600;
@@ -152,6 +216,9 @@
       cursor: pointer;
       text-align: center;
       transition: all 0.2s ease;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .btn-option.active {
@@ -161,6 +228,91 @@
       border: 1px solid #66a0ff;
       box-shadow: 0 2px 10px var(--accent-glow);
       transform: scale(1.02);
+    }
+
+    /* ---- Custom size panel ---- */
+    .custom-panel {
+      margin-top: 8px;
+      border-top: 1px solid var(--border-color);
+      padding-top: 8px;
+    }
+
+    .custom-panel[hidden] { display: none; }
+
+    .mini-seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      background: var(--inset-bg);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      margin-bottom: 8px;
+    }
+
+    .mini-seg button {
+      background: var(--btn-inactive-bg);
+      border: 1px solid transparent;
+      color: var(--text-faint);
+      padding: 7px 4px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+
+    .mini-seg button.active {
+      background: var(--accent-color);
+      color: #ffffff;
+      border-color: #66a0ff;
+    }
+
+    .field-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .field-row[hidden] { display: none; }
+
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1 1 120px;
+    }
+
+    .field label {
+      font-size: 12px;
+      color: var(--text-sub);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    input[type="number"], input[type="text"] {
+      background: var(--field-bg);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font-size: 15px;
+      font-weight: 600;
+      width: 100%;
+      min-width: 0;
+    }
+
+    input[type="number"]:focus, input[type="text"]:focus {
+      outline: 2px solid var(--accent-color);
+      outline-offset: -1px;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: var(--text-sub);
+      line-height: 1.4;
+      margin-top: 6px;
+      width: 100%;
     }
 
     .thumb-grid-container {
@@ -187,6 +339,7 @@
       width: 100%;
       text-align: center;
       padding: 25px 0;
+      line-height: 1.5;
     }
 
     #thumbGrid {
@@ -202,9 +355,13 @@
       aspect-ratio: 1 / 1;
       border-radius: 10px;
       overflow: hidden;
-      background: #000000;
+      background: var(--thumb-bg);
       border: 1px solid var(--border-color);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      box-shadow: var(--shadow-thumb);
+    }
+
+    .thumb-wrapper.is-failed {
+      border-color: var(--danger-color);
     }
 
     .thumb {
@@ -227,6 +384,30 @@
       text-transform: uppercase;
     }
 
+    .thumb-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0, 0, 0, 0.65);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 24px;
+      text-align: center;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      padding: 0;
+    }
+
+    .thumb-remove:hover, .thumb-remove:active {
+      background: var(--danger-color);
+      transform: scale(1.08);
+    }
+
     .action-bar {
       position: fixed;
       bottom: 0;
@@ -234,8 +415,8 @@
       transform: translateX(-50%);
       width: 100%;
       max-width: 520px;
-      padding: 12px;
-      background: rgba(0, 0, 0, 0.92);
+      padding: 12px 12px calc(12px + env(safe-area-inset-bottom)) 12px;
+      background: var(--bar-bg);
       backdrop-filter: blur(10px);
       border-top: 1px solid var(--border-color);
       z-index: 100;
@@ -245,6 +426,10 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
+    }
+
+    .action-grid.single-action {
+      grid-template-columns: 1fr;
     }
 
     .btn-action {
@@ -267,50 +452,234 @@
     .btn-action.ready-state {
       background: var(--success-color);
       box-shadow: 0 4px 14px var(--success-glow);
-      color: #000000;
+      color: #ffffff;
     }
 
+    :root[data-theme="dark"] .btn-action.ready-state { color: #000000; }
+
     .btn-action.btn-secondary {
-      background: #2c2c2e;
-      color: #ffffff;
+      background: var(--secondary-bg);
+      color: var(--text-main);
       box-shadow: none;
       border: 1px solid var(--border-color);
     }
 
     .btn-action.btn-secondary:active {
-      background: #3a3a3c;
+      background: var(--secondary-bg-active);
     }
 
     .btn-action:disabled {
       background: var(--border-color);
-      color: #555558;
+      color: var(--text-faint);
       box-shadow: none;
       cursor: not-allowed;
     }
 
+    /* ---- Progress overlay ---- */
     #loader {
       display: none;
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.85);
+      background: var(--overlay-bg);
+      backdrop-filter: blur(4px);
       z-index: 999;
       justify-content: center;
       align-items: center;
       flex-direction: column;
-      gap: 14px;
+      padding: 24px;
     }
 
-    .spinner {
-      width: 42px;
-      height: 42px;
-      border: 3px solid var(--border-color);
-      border-top-color: var(--accent-color);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+    .loader-box {
+      width: 100%;
+      max-width: 320px;
+      text-align: center;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    #loaderText {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      background: var(--track-bg);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent-color);
+      border-radius: 99px;
+      transition: width 0.18s ease;
+    }
+
+    #progressLabel {
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-sub);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ---- Full-window drop overlay (desktop) ---- */
+    #dropOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1500;
+      background: var(--overlay-bg);
+      backdrop-filter: blur(6px);
+      justify-content: center;
+      align-items: center;
+      padding: 30px;
+      pointer-events: none;
+    }
+
+    #dropOverlay.visible { display: flex; }
+
+    .drop-overlay-box {
+      border: 3px dashed var(--accent-color);
+      border-radius: 20px;
+      padding: 48px 32px;
+      text-align: center;
+      background: var(--accent-soft);
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .drop-overlay-box .big { font-size: 42px; }
+
+    .drop-overlay-box .title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent-color);
+      margin-top: 10px;
+    }
+
+    .drop-overlay-box .sub {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 6px;
+    }
+
+    /* ---- Settings sheet ---- */
+    .sheet {
+      position: fixed;
+      inset: 0;
+      z-index: 1200;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .sheet[hidden] { display: none; }
+
+    .sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    .sheet-panel {
+      position: relative;
+      width: 100%;
+      max-width: 520px;
+      max-height: 88vh;
+      overflow-y: auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 18px 18px 0 0;
+      padding: 16px 16px calc(16px + env(safe-area-inset-bottom)) 16px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .sheet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .sheet-header h2 {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .setting-row:last-of-type { border-bottom: none; }
+
+    .setting-label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .setting-desc {
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
+
+    .setting-control { flex: 0 0 150px; }
+    .setting-control.narrow { flex: 0 0 84px; }
+
+    input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--accent-color);
+      flex: 0 0 auto;
+    }
+
+    .name-preview {
+      background: var(--field-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--success-color);
+      word-break: break-all;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+
+    .sheet-footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .btn-sheet {
+      padding: 13px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid var(--border-color);
+      background: var(--secondary-bg);
+      color: var(--text-main);
+    }
+
+    .btn-sheet.primary {
+      background: var(--accent-color);
+      color: #ffffff;
+      border-color: #66a0ff;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
     }
   </style>
 </head>
@@ -318,18 +687,23 @@
 
   <div class="header">
     <div>
-      <h1>QUICK SHARE v.0.6</h1>
+      <h1>QUICK SHARE v.0.7</h1>
     </div>
-    <button class="btn-refresh" onclick="resetApp()" title="Reset Application">
-      <span>↺</span> Refresh
-    </button>
+    <div class="header-actions">
+      <button class="btn-icon" id="installBtn" hidden title="Install this app">⤓</button>
+      <button class="btn-icon" id="themeBtn" title="Theme: follow system">◐</button>
+      <button class="btn-icon" id="settingsBtn" title="File naming settings">⚙</button>
+      <button class="btn-refresh" id="refreshBtn" title="Start over">
+        <span>↺</span> Refresh
+      </button>
+    </div>
   </div>
 
   <div class="card" style="margin-bottom: 8px;">
     <input type="file" id="fileInput" multiple accept="image/*,.heic,.heif" style="display: none;">
-    <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+    <div class="drop-zone" id="dropZone">
       <span style="font-size: 20px;">🖼️</span>
-      <span class="drop-zone-text">Tap to Select Images</span>
+      <span class="drop-zone-text" id="dropZoneText">Tap to Select Images</span>
     </div>
   </div>
 
@@ -337,19 +711,47 @@
     <div class="card">
       <div class="card-title">Scale Size</div>
       <div class="scale-row" id="sizeGroup">
-        <button class="btn-option" onclick="setScale(0.25, this)">25%</button>
-        <button class="btn-option" onclick="setScale(0.40, this)">40%</button>
-        <button class="btn-option active" onclick="setScale(0.50, this)">50%</button>
-        <button class="btn-option" onclick="setScale(0.75, this)">75%</button>
-        <button class="btn-option" onclick="setScale(1.00, this)">100%</button>
+        <button class="btn-option" id="customBtn" data-role="custom">Custom</button>
+        <button class="btn-option" data-scale="0.40">40%</button>
+        <button class="btn-option active" data-scale="0.50">50%</button>
+        <button class="btn-option" data-scale="0.75">75%</button>
+        <button class="btn-option" data-scale="1.00">100%</button>
+      </div>
+
+      <div class="custom-panel" id="customPanel" hidden>
+        <div class="mini-seg" id="customModeSeg">
+          <button data-cmode="percent" class="active">Percentage</button>
+          <button data-cmode="pixels">Pixels</button>
+        </div>
+
+        <div class="field-row" id="customPercentRow">
+          <div class="field">
+            <label for="customPercent">Scale to</label>
+            <input type="number" id="customPercent" inputmode="numeric" min="1" max="400" step="1" value="25">
+            <label for="customPercent">%</label>
+          </div>
+          <div class="hint">Any value from 1 to 400. Above 100 enlarges the image.</div>
+        </div>
+
+        <div class="field-row" id="customPixelRow" hidden>
+          <div class="field">
+            <label for="customWidth">Max W</label>
+            <input type="number" id="customWidth" inputmode="numeric" min="1" max="20000" step="1" value="1920" placeholder="auto">
+          </div>
+          <div class="field">
+            <label for="customHeight">Max H</label>
+            <input type="number" id="customHeight" inputmode="numeric" min="1" max="20000" step="1" placeholder="auto">
+          </div>
+          <div class="hint">Images fit inside this box and keep their aspect ratio. Leave a field empty to let that side follow. Nothing is enlarged.</div>
+        </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">Format</div>
       <div class="format-row" id="formatGroup">
-        <button class="btn-option active" onclick="setFormat('image/jpeg', this)">JPG</button>
-        <button class="btn-option" onclick="setFormat('original', this)">ORIG</button>
+        <button class="btn-option active" data-format="image/jpeg">JPG</button>
+        <button class="btn-option" data-format="original">ORIG</button>
       </div>
     </div>
   </div>
@@ -367,35 +769,159 @@
 
   <div class="action-bar">
     <div id="singleActionContainer">
-      <button class="btn-action" id="actionButton" disabled onclick="handleActionClick()">
+      <button class="btn-action" id="actionButton" disabled>
         Select Images First
       </button>
     </div>
     <div id="dualActionContainer" class="action-grid" style="display: none;">
-      <button class="btn-action btn-secondary" onclick="downloadAllZip()">
+      <button class="btn-action btn-secondary" id="zipButton">
         📦 Download ZIP
       </button>
-      <button class="btn-action ready-state" onclick="shareNow()">
+      <button class="btn-action ready-state" id="shareButton">
         📤 Share
       </button>
     </div>
   </div>
 
   <div id="loader">
-    <div class="spinner"></div>
-    <div id="loaderText" style="font-weight: 600; font-size: 15px;">Processing...</div>
+    <div class="loader-box">
+      <div id="loaderText">Resizing images…</div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div id="progressLabel">0% complete — 0 of 0 images</div>
+    </div>
+  </div>
+
+  <div id="dropOverlay">
+    <div class="drop-overlay-box">
+      <div class="big">🖼️</div>
+      <div class="title">Drop images to add them</div>
+      <div class="sub">JPG, PNG, WebP, HEIC and more</div>
+    </div>
+  </div>
+
+  <div class="sheet" id="settingsSheet" hidden>
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="File naming settings">
+      <div class="sheet-header">
+        <h2>File naming</h2>
+        <button class="btn-icon" id="sheetCloseBtn" title="Close">✕</button>
+      </div>
+
+      <div class="name-preview" id="namePreview">photo.jpg</div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Prefix</div>
+          <div class="setting-desc">Goes at the front of every name</div>
+        </div>
+        <div class="setting-control"><input type="text" id="setPrefix" placeholder="e.g. Image"></div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Keep original name</div>
+          <div class="setting-desc">Reuses the name of the source file</div>
+        </div>
+        <input type="checkbox" id="setKeepName" checked>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Add date</div>
+          <div class="setting-desc">The date the source file was last changed</div>
+        </div>
+        <input type="checkbox" id="setUseDate">
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Suffix</div>
+          <div class="setting-desc">Goes after the name and date</div>
+        </div>
+        <div class="setting-control"><input type="text" id="setSuffix" placeholder="e.g. web"></div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Add a number</div>
+          <div class="setting-desc">Counts up through the batch</div>
+        </div>
+        <input type="checkbox" id="setUseIndex" checked>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Start at</div>
+          <div class="setting-desc">First number in the sequence</div>
+        </div>
+        <div class="setting-control narrow"><input type="number" id="setStart" inputmode="numeric" min="0" max="99999" value="1"></div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Digits</div>
+          <div class="setting-desc">01 uses two digits, 001 uses three</div>
+        </div>
+        <div class="setting-control narrow"><input type="number" id="setDigits" inputmode="numeric" min="1" max="6" value="2"></div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Separator</div>
+          <div class="setting-desc">Sits between each part</div>
+        </div>
+        <div class="setting-control narrow"><input type="text" id="setSep" maxlength="3" value="_"></div>
+      </div>
+
+      <div class="sheet-footer">
+        <button class="btn-sheet" id="sheetResetBtn">Reset</button>
+        <button class="btn-sheet primary" id="sheetDoneBtn">Done</button>
+      </div>
+    </div>
   </div>
 
 <script>
-  let selectedFiles = []; 
+  'use strict';
+
+  /* ------------------------------------------------------------------ *
+   * State
+   * ------------------------------------------------------------------ */
+  let selectedFiles = [];          // { id, name, type, file, size, isHeic, el, img, badge }
   let processedFilesCache = [];
-  let currentScale = 0.50; 
+  let scaleMode = 'percent';       // 'percent' | 'pixels'
+  let currentScale = 0.50;
+  let maxWidth = 1920;
+  let maxHeight = null;
+  let customMode = 'percent';      // which tab the Custom panel shows
   let currentFormat = 'image/jpeg';
   let thumbObjectUrls = [];
   let isProcessed = false;
   let totalOriginalSize = 0;
+  let fileIdSeq = 0;
+  let isBusy = false;
 
+  const DEFAULT_NAMING = {
+    prefix: '',
+    suffix: '',
+    keepName: true,
+    useDate: false,
+    useIndex: true,
+    start: 1,
+    digits: 2,
+    sep: '_'
+  };
+  let naming = Object.assign({}, DEFAULT_NAMING);
+
+  const HEIC_DECODE_TIMEOUT_MS = 30000;
+  const IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|bmp|avif|heic|heif|tiff?|jfif)$/i;
+
+  /* ------------------------------------------------------------------ *
+   * Elements
+   * ------------------------------------------------------------------ */
   const fileInput = document.getElementById('fileInput');
+  const dropZone = document.getElementById('dropZone');
+  const dropZoneText = document.getElementById('dropZoneText');
+  const dropOverlay = document.getElementById('dropOverlay');
   const previewTitle = document.getElementById('previewTitle');
   const sizeStats = document.getElementById('sizeStats');
   const thumbGrid = document.getElementById('thumbGrid');
@@ -403,80 +929,481 @@
   const actionButton = document.getElementById('actionButton');
   const singleActionContainer = document.getElementById('singleActionContainer');
   const dualActionContainer = document.getElementById('dualActionContainer');
+  const zipButton = document.getElementById('zipButton');
+  const shareButton = document.getElementById('shareButton');
   const loader = document.getElementById('loader');
   const loaderText = document.getElementById('loaderText');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const sizeGroup = document.getElementById('sizeGroup');
+  const formatGroup = document.getElementById('formatGroup');
+  const customBtn = document.getElementById('customBtn');
+  const customPanel = document.getElementById('customPanel');
+  const customModeSeg = document.getElementById('customModeSeg');
+  const customPercentRow = document.getElementById('customPercentRow');
+  const customPixelRow = document.getElementById('customPixelRow');
+  const customPercent = document.getElementById('customPercent');
+  const customWidth = document.getElementById('customWidth');
+  const customHeight = document.getElementById('customHeight');
+  const settingsSheet = document.getElementById('settingsSheet');
+  const namePreview = document.getElementById('namePreview');
+  const metaThemeColor = document.getElementById('metaThemeColor');
+
+  /* Some embedded webviews ship without matchMedia; fall back quietly. */
+  function mediaQuery(query) {
+    try {
+      if (typeof window.matchMedia === 'function') return window.matchMedia(query);
+    } catch (e) { /* fall through */ }
+    return { matches: false, addEventListener() {}, addListener() {} };
+  }
+
+  const isFinePointer = mediaQuery('(hover: hover) and (pointer: fine)').matches;
+
+  /* ------------------------------------------------------------------ *
+   * Theme — follows the system unless the user picks a side
+   * ------------------------------------------------------------------ */
+  const THEME_ICONS = { auto: '◐', light: '☀', dark: '🌙' };
+  const THEME_TITLES = {
+    auto: 'Theme: follow system',
+    light: 'Theme: light',
+    dark: 'Theme: dark'
+  };
+  const lightQuery = mediaQuery('(prefers-color-scheme: light)');
+  let themePref = 'auto';
+
+  function applyTheme() {
+    const resolved = themePref === 'auto'
+      ? (lightQuery.matches ? 'light' : 'dark')
+      : themePref;
+    document.documentElement.setAttribute('data-theme', resolved);
+    const themeBtn = document.getElementById('themeBtn');
+    themeBtn.textContent = THEME_ICONS[themePref];
+    themeBtn.title = THEME_TITLES[themePref];
+    metaThemeColor.setAttribute('content', resolved === 'light' ? '#f2f2f7' : '#000000');
+  }
+
+  function cycleTheme() {
+    themePref = themePref === 'auto' ? 'light' : (themePref === 'light' ? 'dark' : 'auto');
+    store('qs_theme', themePref);
+    applyTheme();
+  }
+
+  if (typeof lightQuery.addEventListener === 'function') {
+    lightQuery.addEventListener('change', () => { if (themePref === 'auto') applyTheme(); });
+  } else if (typeof lightQuery.addListener === 'function') {
+    lightQuery.addListener(() => { if (themePref === 'auto') applyTheme(); });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Small helpers
+   * ------------------------------------------------------------------ */
+  function store(key, value) {
+    try { localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value)); }
+    catch (e) { /* private mode — settings just will not persist */ }
+  }
+
+  function read(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
 
   function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
+    if (!bytes) return '0 B';
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.min(sizes.length - 1, Math.floor(Math.log(bytes) / Math.log(k)));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
   function updateSizeStats(origBytes, convBytes = null) {
-    if (!origBytes) {
-      sizeStats.innerHTML = '';
-      return;
-    }
-    const origStr = `<span style="color: #ff9500; font-weight: 700;">${formatBytes(origBytes)}</span>`;
+    if (!origBytes) { sizeStats.innerHTML = ''; return; }
+    const origStr = `<span style="color: var(--warn-color); font-weight: 700;">${formatBytes(origBytes)}</span>`;
     let convStr = '<span style="color: var(--text-sub); font-weight: 500;">--</span>';
-    
     if (convBytes !== null) {
-      convStr = `<span style="color: #30d158; font-weight: 700;">${formatBytes(convBytes)}</span>`;
+      convStr = `<span style="color: var(--success-color); font-weight: 700;">${formatBytes(convBytes)}</span>`;
     }
-
     sizeStats.innerHTML = `Orig: ${origStr} | Conv: ${convStr}`;
   }
 
-  function setScale(scale, el) {
+  /* ------------------------------------------------------------------ *
+   * Progress
+   * ------------------------------------------------------------------ */
+  function showProgress(title) {
+    loaderText.textContent = title;
+    setProgress(0, 1, '');
+    loader.style.display = 'flex';
+  }
+
+  function hideProgress() {
+    loader.style.display = 'none';
+  }
+
+  function setProgress(done, total, noun) {
+    const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const word = noun === undefined ? (total === 1 ? 'image' : 'images') : noun;
+    progressFill.style.width = pct + '%';
+    progressLabel.textContent = word
+      ? `${pct}% complete — ${done} of ${total} ${word}`
+      : `${pct}% complete`;
+  }
+
+  /* Lets the browser paint between heavy steps. */
+  function nextFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Size controls
+   * ------------------------------------------------------------------ */
+  function setPresetScale(scale, el) {
+    scaleMode = 'percent';
     currentScale = scale;
-    document.querySelectorAll('#sizeGroup .btn-option').forEach(b => b.classList.remove('active'));
-    el.classList.add('active');
+    markActive(sizeGroup, el);
+    customPanel.hidden = true;
     invalidateProcessedCache();
+  }
+
+  function activateCustom() {
+    markActive(sizeGroup, customBtn);
+    customPanel.hidden = false;
+    applyCustomValues();
+  }
+
+  function applyCustomValues() {
+    if (customMode === 'percent') {
+      let pct = parseInt(customPercent.value, 10);
+      if (!isFinite(pct) || pct < 1) pct = 1;
+      if (pct > 400) pct = 400;
+      scaleMode = 'percent';
+      currentScale = pct / 100;
+    } else {
+      const w = parseInt(customWidth.value, 10);
+      const h = parseInt(customHeight.value, 10);
+      maxWidth = isFinite(w) && w > 0 ? w : null;
+      maxHeight = isFinite(h) && h > 0 ? h : null;
+      scaleMode = 'pixels';
+    }
+    customBtn.textContent = customButtonLabel();
+    invalidateProcessedCache();
+  }
+
+  function customButtonLabel() {
+    if (customMode === 'pixels') {
+      if (!maxWidth && !maxHeight) return 'Custom';
+      if (maxWidth && maxHeight) return `${maxWidth}×${maxHeight}`;
+      return maxWidth ? `W ${maxWidth}px` : `H ${maxHeight}px`;
+    }
+    const pct = Math.round(currentScale * 100);
+    return customBtn.classList.contains('active') ? `${pct}%` : 'Custom';
+  }
+
+  function isCustomActive() {
+    return customBtn.classList.contains('active');
+  }
+
+  /* Works out the output size for one image. */
+  function computeTarget(width, height) {
+    let factor = 1;
+    if (scaleMode === 'pixels') {
+      const ratios = [];
+      if (maxWidth) ratios.push(maxWidth / width);
+      if (maxHeight) ratios.push(maxHeight / height);
+      factor = ratios.length ? Math.min.apply(null, ratios) : 1;
+      if (factor > 1) factor = 1;   // a max is a ceiling, never an enlargement
+    } else {
+      factor = currentScale;
+    }
+    return {
+      w: Math.max(1, Math.round(width * factor)),
+      h: Math.max(1, Math.round(height * factor))
+    };
+  }
+
+  function sizeTag() {
+    if (scaleMode === 'pixels') {
+      if (maxWidth && maxHeight) return `${maxWidth}x${maxHeight}`;
+      if (maxWidth) return `w${maxWidth}`;
+      if (maxHeight) return `h${maxHeight}`;
+      return 'full';
+    }
+    return `${Math.round(currentScale * 100)}pct`;
+  }
+
+  function markActive(group, el) {
+    group.querySelectorAll('.btn-option').forEach(b => b.classList.remove('active'));
+    if (el) el.classList.add('active');
   }
 
   function setFormat(format, el) {
     currentFormat = format;
-    document.querySelectorAll('#formatGroup .btn-option').forEach(b => b.classList.remove('active'));
-    el.classList.add('active');
+    markActive(formatGroup, el);
     invalidateProcessedCache();
   }
 
-  function invalidateProcessedCache() {
-    if (selectedFiles.length > 0) {
-      isProcessed = false;
-      processedFilesCache = [];
-      singleActionContainer.style.display = 'block';
-      dualActionContainer.style.display = 'none';
-      actionButton.classList.remove('ready-state');
-      actionButton.innerText = `⚙ Process Images (${selectedFiles.length})`;
-      updateSizeStats(totalOriginalSize, null);
+  /* ------------------------------------------------------------------ *
+   * File naming
+   * ------------------------------------------------------------------ */
+  function loadNaming() {
+    const raw = read('qs_naming');
+    if (raw) {
+      try { naming = Object.assign({}, DEFAULT_NAMING, JSON.parse(raw)); }
+      catch (e) { naming = Object.assign({}, DEFAULT_NAMING); }
+    }
+    writeNamingToForm();
+  }
+
+  function writeNamingToForm() {
+    document.getElementById('setPrefix').value = naming.prefix;
+    document.getElementById('setSuffix').value = naming.suffix;
+    document.getElementById('setKeepName').checked = naming.keepName;
+    document.getElementById('setUseDate').checked = naming.useDate;
+    document.getElementById('setUseIndex').checked = naming.useIndex;
+    document.getElementById('setStart').value = naming.start;
+    document.getElementById('setDigits').value = naming.digits;
+    document.getElementById('setSep').value = naming.sep;
+    updateNamePreview();
+  }
+
+  function readNamingFromForm() {
+    const digits = parseInt(document.getElementById('setDigits').value, 10);
+    const start = parseInt(document.getElementById('setStart').value, 10);
+    naming = {
+      prefix: document.getElementById('setPrefix').value.trim(),
+      suffix: document.getElementById('setSuffix').value.trim(),
+      keepName: document.getElementById('setKeepName').checked,
+      useDate: document.getElementById('setUseDate').checked,
+      useIndex: document.getElementById('setUseIndex').checked,
+      start: isFinite(start) && start >= 0 ? start : 1,
+      digits: isFinite(digits) ? Math.min(6, Math.max(1, digits)) : 2,
+      sep: document.getElementById('setSep').value || '_'
+    };
+    store('qs_naming', naming);
+    updateNamePreview();
+    invalidateProcessedCache();
+  }
+
+  function sanitizeNamePart(str) {
+    return String(str).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim();
+  }
+
+  function dateStamp(ms) {
+    const d = new Date(ms || Date.now());
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function buildFileName(baseName, lastModified, position, ext) {
+    const parts = [];
+    if (naming.prefix) parts.push(sanitizeNamePart(naming.prefix));
+    if (naming.keepName) parts.push(sanitizeNamePart(baseName));
+    if (naming.useDate) parts.push(dateStamp(lastModified));
+    if (naming.suffix) parts.push(sanitizeNamePart(naming.suffix));
+    if (naming.useIndex) {
+      parts.push(String(naming.start + position).padStart(naming.digits, '0'));
+    }
+    const sep = sanitizeNamePart(naming.sep) || '_';
+    let stem = parts.filter(Boolean).join(sep);
+    if (!stem) stem = sanitizeNamePart(baseName) || 'image';
+    return `${stem}.${ext}`;
+  }
+
+  function makeUnique(name, usedSet) {
+    if (!usedSet.has(name)) { usedSet.add(name); return name; }
+    const dot = name.lastIndexOf('.');
+    const stem = dot > 0 ? name.slice(0, dot) : name;
+    const ext = dot > 0 ? name.slice(dot) : '';
+    let n = 2;
+    while (usedSet.has(`${stem}-${n}${ext}`)) n++;
+    const unique = `${stem}-${n}${ext}`;
+    usedSet.add(unique);
+    return unique;
+  }
+
+  function updateNamePreview() {
+    const sample = selectedFiles[0];
+    const base = sample ? stripExt(sample.name) : 'photo';
+    const when = sample ? sample.file.lastModified : Date.now();
+    const ext = currentFormat === 'original' && sample && !sample.isHeic
+      ? extFromMime(sample.type) : 'jpg';
+    const first = buildFileName(base, when, 0, ext);
+    const second = buildFileName(sample ? base : 'sunset', when, 1, ext);
+    namePreview.innerHTML = `${first}<br>${second}`;
+  }
+
+  function stripExt(name) {
+    const dot = name.lastIndexOf('.');
+    return dot > 0 ? name.slice(0, dot) : name;
+  }
+
+  function extFromMime(mime) {
+    let ext = (mime || '').split('/')[1] || 'jpg';
+    ext = ext.split('+')[0];
+    if (ext === 'jpeg') ext = 'jpg';
+    return ext;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Selection handling
+   * ------------------------------------------------------------------ */
+  function looksLikeImage(file) {
+    return (file.type && file.type.startsWith('image/')) || IMAGE_EXT_RE.test(file.name);
+  }
+
+  function addFiles(fileList) {
+    const incoming = Array.from(fileList || []).filter(looksLikeImage);
+    if (incoming.length === 0) return;
+
+    let added = 0;
+    for (const rawFile of incoming) {
+      const duplicate = selectedFiles.some(f =>
+        f.name === rawFile.name && f.size === rawFile.size && f.file.lastModified === rawFile.lastModified);
+      if (duplicate) continue;
+
+      const lower = rawFile.name.toLowerCase();
+      const isHeic = lower.endsWith('.heic') || lower.endsWith('.heif') ||
+        /image\/hei[cf]/.test(rawFile.type || '');
+      const fileObj = {
+        id: ++fileIdSeq,
+        name: rawFile.name,
+        type: (isHeic && !rawFile.type) ? 'image/heic' : rawFile.type,
+        size: rawFile.size,
+        file: rawFile,
+        isHeic: isHeic
+      };
+      selectedFiles.push(fileObj);
+      renderThumb(fileObj);
+      added++;
+    }
+
+    if (added > 0) {
+      recalcOriginalSize();
+      updateSelectionUI();
+      invalidateProcessedCache();
+      updateNamePreview();
     }
   }
 
-  function resetApp() {
+  function renderThumb(fileObj) {
+    const ext = (fileObj.name.split('.').pop() || 'img').substring(0, 4);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'thumb-wrapper';
+    wrap.dataset.id = String(fileObj.id);
+
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.alt = fileObj.name;
+    img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" fill="%232c2c2e"><rect width="120" height="120"/></svg>';
+
+    const badge = document.createElement('div');
+    badge.className = 'thumb-ext';
+    badge.textContent = ext;
+    fileObj.extLabel = ext;
+
+    const remove = document.createElement('button');
+    remove.className = 'thumb-remove';
+    remove.type = 'button';
+    remove.innerHTML = '✕';
+    remove.title = `Remove ${fileObj.name}`;
+    remove.setAttribute('aria-label', `Remove ${fileObj.name}`);
+    remove.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeFile(fileObj.id);
+    });
+
+    wrap.appendChild(img);
+    wrap.appendChild(badge);
+    wrap.appendChild(remove);
+    thumbGrid.appendChild(wrap);
+
+    fileObj.el = wrap;
+    fileObj.img = img;
+    fileObj.badge = badge;
+
+    if (fileObj.isHeic) {
+      queueHeicThumbnail(fileObj);
+    } else {
+      const url = URL.createObjectURL(fileObj.file);
+      thumbObjectUrls.push(url);
+      img.src = url;
+    }
+  }
+
+  function removeFile(id) {
+    if (isBusy) return;
+    const index = selectedFiles.findIndex(f => f.id === id);
+    if (index === -1) return;
+    const [removed] = selectedFiles.splice(index, 1);
+    if (removed.el && removed.el.parentNode) removed.el.parentNode.removeChild(removed.el);
+
+    recalcOriginalSize();
+    if (selectedFiles.length === 0) {
+      clearSelection();
+    } else {
+      updateSelectionUI();
+      invalidateProcessedCache();
+      updateNamePreview();
+    }
+  }
+
+  function recalcOriginalSize() {
+    totalOriginalSize = selectedFiles.reduce((acc, f) => acc + f.size, 0);
+  }
+
+  function updateSelectionUI() {
+    const n = selectedFiles.length;
+    previewTitle.textContent = `Selected Previews (${n})`;
+    emptyState.style.display = n ? 'none' : 'block';
+    thumbGrid.style.display = n ? 'grid' : 'none';
+    actionButton.disabled = n === 0;
+  }
+
+  function invalidateProcessedCache() {
+    isProcessed = false;
+    processedFilesCache = [];
+    singleActionContainer.style.display = 'block';
+    dualActionContainer.style.display = 'none';
+    actionButton.classList.remove('ready-state');
+    if (selectedFiles.length > 0) {
+      actionButton.disabled = false;
+      actionButton.textContent = `Resize ${selectedFiles.length} image${selectedFiles.length === 1 ? '' : 's'}`;
+      updateSizeStats(totalOriginalSize, null);
+    } else {
+      actionButton.disabled = true;
+      actionButton.textContent = 'Select Images First';
+      updateSizeStats(0);
+    }
+  }
+
+  /* Clears the queue but keeps the user's size, format and naming choices. */
+  function clearSelection() {
     clearOldThumbUrls();
     selectedFiles = [];
     processedFilesCache = [];
     isProcessed = false;
     totalOriginalSize = 0;
     fileInput.value = '';
-    emptyState.style.display = 'block';
-    thumbGrid.style.display = 'none';
     thumbGrid.innerHTML = '';
-    previewTitle.innerText = 'Selected Previews (0)';
     sizeStats.innerHTML = '';
-    
-    singleActionContainer.style.display = 'block';
-    dualActionContainer.style.display = 'none';
-    actionButton.disabled = true;
-    actionButton.classList.remove('ready-state');
-    actionButton.innerText = 'Select Images First';
-    
-    const defaultScaleBtn = document.querySelectorAll('#sizeGroup .btn-option')[2]; // 50%
-    if (defaultScaleBtn) setScale(0.50, defaultScaleBtn);
-    setFormat('image/jpeg', document.querySelectorAll('#formatGroup .btn-option')[0]);
+    updateSelectionUI();
+    invalidateProcessedCache();
+    updateNamePreview();
+  }
+
+  /* Full reset, including the size and format controls. */
+  function resetApp() {
+    clearSelection();
+    customMode = 'percent';
+    customPercent.value = '25';
+    customWidth.value = '1920';
+    customHeight.value = '';
+    maxWidth = 1920;
+    maxHeight = null;
+    setCustomMode('percent');
+    customPanel.hidden = true;
+    customBtn.textContent = 'Custom';
+    const defaultScaleBtn = sizeGroup.querySelector('[data-scale="0.50"]');
+    setPresetScale(0.50, defaultScaleBtn);
+    setFormat('image/jpeg', formatGroup.querySelector('[data-format="image/jpeg"]'));
   }
 
   function clearOldThumbUrls() {
@@ -484,23 +1411,86 @@
     thumbObjectUrls = [];
   }
 
+  /* ------------------------------------------------------------------ *
+   * HEIC decoding
+   * ------------------------------------------------------------------ */
   let heifModuleInstance = null;
   function getHeifModule() {
-    if (!heifModuleInstance) {
-      heifModuleInstance = window.libheif();
+    if (typeof window.libheif !== 'function') {
+      throw new Error('HEIC decoder is not loaded. Reconnect once to fetch it, then it works offline.');
     }
+    if (!heifModuleInstance) heifModuleInstance = window.libheif();
     return heifModuleInstance;
   }
 
+  /*
+   * libheif's display() takes a callback. If the WASM binary throws, never fires,
+   * or hands back nothing, a bare Promise would stay pending forever and the
+   * progress overlay would hang. This wrapper always settles: on error, on a
+   * falsy result, or on a timeout.
+   */
+  function toError(e) {
+    return (e && typeof e.message === 'string') ? e : new Error(String(e));
+  }
+
+  function heifDisplay(image, imageData, timeoutMs = HEIC_DECODE_TIMEOUT_MS) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (fn, arg) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn(arg);
+      };
+      const timer = setTimeout(() => {
+        const err = new Error(`HEIC decode timed out after ${Math.max(1, Math.round(timeoutMs / 1000))}s`);
+        err.isTimeout = true;   // the decoder may still be running, so do not free it
+        finish(reject, err);
+      }, timeoutMs);
+
+      try {
+        const maybePromise = image.display(imageData, (displayData) => {
+          if (!displayData) finish(reject, new Error('HEIC decoder returned no image data'));
+          else finish(resolve, displayData);
+        });
+        // Some builds also return a promise; honour a rejection from it.
+        if (maybePromise && typeof maybePromise.catch === 'function') {
+          maybePromise.catch(err => finish(reject, toError(err)));
+        }
+      } catch (err) {
+        finish(reject, toError(err));
+      }
+    });
+  }
+
+  function freeImage(img) {
+    try { if (img && typeof img.free === 'function') img.free(); } catch (e) { /* ignore */ }
+  }
+
+  /*
+   * Paints decoded pixels onto a fresh canvas. `opaque` fills white first so
+   * transparent HEIC/PNG pixels never come out black in a JPEG.
+   */
+  function paintToCanvas(source, w, h, opaque) {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (opaque) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, w, h);
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source, 0, 0, w, h);
+    return canvas;
+  }
+
   async function decodeHeicForThumbnail(buffer, targetSize = 240) {
-    const uint8Array = new Uint8Array(buffer);
     const heif = getHeifModule();
     const decoder = new heif.HeifDecoder();
-    const images = decoder.decode(uint8Array);
-
-    if (!images || !images.length) {
-      throw new Error("Could not decode HEIC image.");
-    }
+    const images = decoder.decode(new Uint8Array(buffer));
+    if (!images || !images.length) throw new Error('Could not decode HEIC image.');
 
     const primaryImage = images[0];
     let imageToDisplay = primaryImage;
@@ -516,63 +1506,52 @@
       }
     } catch (e) {
       imageToDisplay = primaryImage;
+      isThumbnail = false;
     }
 
     const width = imageToDisplay.get_width();
     const height = imageToDisplay.get_height();
 
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    const raw = document.createElement('canvas');
+    raw.width = width;
+    raw.height = height;
+    const ctx = raw.getContext('2d');
     const imageData = ctx.createImageData(width, height);
 
-    await new Promise((resolve, reject) => {
-      imageToDisplay.display(imageData, (displayData) => {
-        if (!displayData) return reject(new Error('HEIF display error'));
-        resolve();
-      });
-    });
+    try {
+      await heifDisplay(imageToDisplay, imageData);
+      if (isThumbnail) freeImage(imageToDisplay);
+      freeImage(primaryImage);
+      for (let i = 1; i < images.length; i++) freeImage(images[i]);
+    } catch (err) {
+      if (!err || !err.isTimeout) {
+        if (isThumbnail) freeImage(imageToDisplay);
+        freeImage(primaryImage);
+        for (let i = 1; i < images.length; i++) freeImage(images[i]);
+      }
+      throw err;
+    }
 
     ctx.putImageData(imageData, 0, 0);
 
-    if (isThumbnail && typeof imageToDisplay.free === 'function') {
-      imageToDisplay.free();
-    }
-    if (typeof primaryImage.free === 'function') {
-      primaryImage.free();
-    }
-    for (let i = 1; i < images.length; i++) {
-      if (typeof images[i].free === 'function') images[i].free();
-    }
-
+    let tw = width, th = height;
     if (width > targetSize || height > targetSize) {
-      const scale = Math.min(targetSize / width, targetSize / height);
-      const tw = Math.max(1, Math.round(width * scale));
-      const th = Math.max(1, Math.round(height * scale));
-
-      const thumbCanvas = document.createElement('canvas');
-      thumbCanvas.width = tw;
-      thumbCanvas.height = th;
-      const tCtx = thumbCanvas.getContext('2d');
-      tCtx.drawImage(canvas, 0, 0, tw, th);
-
-      canvas.width = 0; canvas.height = 0;
-      return thumbCanvas;
+      const s = Math.min(targetSize / width, targetSize / height);
+      tw = Math.max(1, Math.round(width * s));
+      th = Math.max(1, Math.round(height * s));
     }
 
-    return canvas;
+    // Composited onto white: the preview is encoded as JPEG.
+    const out = paintToCanvas(raw, tw, th, true);
+    raw.width = 0; raw.height = 0;
+    return out;
   }
 
   async function decodeHeicBufferToCanvas(buffer) {
-    const uint8Array = new Uint8Array(buffer);
     const heif = getHeifModule();
     const decoder = new heif.HeifDecoder();
-    const images = decoder.decode(uint8Array);
-    
-    if (!images || !images.length) {
-      throw new Error("Could not decode HEIC image.");
-    }
+    const images = decoder.decode(new Uint8Array(buffer));
+    if (!images || !images.length) throw new Error('Could not decode HEIC image.');
 
     const image = images[0];
     const width = image.get_width();
@@ -584,20 +1563,19 @@
     const ctx = canvas.getContext('2d');
     const imageData = ctx.createImageData(width, height);
 
-    await new Promise((resolve, reject) => {
-      image.display(imageData, (displayData) => {
-        if (!displayData) return reject(new Error('HEIF display error'));
-        resolve();
-      });
-    });
-
-    ctx.putImageData(imageData, 0, 0);
-
-    if (typeof image.free === 'function') image.free();
-    for (let i = 1; i < images.length; i++) {
-      if (typeof images[i].free === 'function') images[i].free();
+    try {
+      await heifDisplay(image, imageData);
+      freeImage(image);
+      for (let i = 1; i < images.length; i++) freeImage(images[i]);
+    } catch (err) {
+      if (!err || !err.isTimeout) {
+        freeImage(image);
+        for (let i = 1; i < images.length; i++) freeImage(images[i]);
+      }
+      throw err;
     }
 
+    ctx.putImageData(imageData, 0, 0);
     return { canvas, width, height };
   }
 
@@ -612,216 +1590,231 @@
     await Promise.all(workers);
   }
 
-  async function loadHeicThumbnail(fileObj, imgElement, badgeElement) {
+  /* Thumbnails decode two at a time, whatever order they arrive in. */
+  let heicThumbQueue = [];
+  let heicThumbRunning = false;
+
+  function queueHeicThumbnail(fileObj) {
+    heicThumbQueue.push(fileObj);
+    if (heicThumbRunning) return;
+    heicThumbRunning = true;
+    (async () => {
+      while (heicThumbQueue.length) {
+        const batch = heicThumbQueue.splice(0, heicThumbQueue.length);
+        await mapConcurrent(batch, 2, loadHeicThumbnail);
+      }
+      heicThumbRunning = false;
+    })();
+  }
+
+  async function loadHeicThumbnail(fileObj) {
+    if (!fileObj.img || !fileObj.el || !fileObj.el.isConnected) return;
     try {
       const buffer = await fileObj.file.arrayBuffer();
       const thumbCanvas = await decodeHeicForThumbnail(buffer, 240);
-
-      thumbCanvas.toBlob(blob => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          thumbObjectUrls.push(url);
-          imgElement.src = url;
-        }
-        thumbCanvas.width = 0;
-        thumbCanvas.height = 0;
-      }, 'image/jpeg', 0.7);
+      await new Promise(resolve => {
+        thumbCanvas.toBlob(blob => {
+          if (blob && fileObj.el && fileObj.el.isConnected) {
+            const url = URL.createObjectURL(blob);
+            thumbObjectUrls.push(url);
+            fileObj.img.src = url;
+          }
+          thumbCanvas.width = 0;
+          thumbCanvas.height = 0;
+          resolve();
+        }, 'image/jpeg', 0.7);
+      });
     } catch (err) {
-      console.error("HEIC Thumbnail Error:", err);
-      badgeElement.innerText = "ERR";
+      console.error('HEIC thumbnail failed:', fileObj.name, err);
+      if (fileObj.badge) fileObj.badge.textContent = 'NO PREVIEW';
     }
   }
 
-  fileInput.addEventListener('change', async (e) => {
-    clearOldThumbUrls();
-    const rawFiles = Array.from(e.target.files);
-    if (rawFiles.length === 0) {
-      resetApp();
-      return;
-    }
-
-    selectedFiles = [];
-    totalOriginalSize = 0; 
-    
-    for (const rawFile of rawFiles) {
-      const isHeic = rawFile.name.toLowerCase().endsWith('.heic') || rawFile.name.toLowerCase().endsWith('.heif');
-      const fileType = (isHeic && !rawFile.type) ? 'image/heic' : rawFile.type;
-
-      selectedFiles.push({
-        name: rawFile.name,
-        type: fileType,
-        file: rawFile,
-        isHeic: isHeic
-      });
-      totalOriginalSize += rawFile.size;
-    }
-
-    if (selectedFiles.length > 0) {
-      emptyState.style.display = 'none';
-      thumbGrid.style.display = 'grid';
-      thumbGrid.innerHTML = '';
-      previewTitle.innerText = `Selected Previews (${selectedFiles.length})`;
-      actionButton.disabled = false;
-      invalidateProcessedCache();
-
-      const heicQueue = [];
-
-      selectedFiles.forEach((fileObj) => {
-        const ext = fileObj.name.split('.').pop().substring(0, 4);
-        const wrap = document.createElement('div');
-        wrap.className = 'thumb-wrapper';
-        
-        const img = document.createElement('img');
-        img.className = 'thumb';
-        img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" fill="%232c2c2e"><rect width="120" height="120"/></svg>';
-        
-        const badge = document.createElement('div');
-        badge.className = 'thumb-ext';
-        badge.innerText = ext;
-
-        wrap.appendChild(img);
-        wrap.appendChild(badge);
-        thumbGrid.appendChild(wrap);
-
-        if (fileObj.isHeic) {
-          heicQueue.push({ fileObj, img, badge });
-        } else {
-          const url = URL.createObjectURL(fileObj.file);
-          thumbObjectUrls.push(url);
-          img.src = url;
-        }
-      });
-
-      if (heicQueue.length > 0) {
-        mapConcurrent(heicQueue, 2, async (item) => {
-          await loadHeicThumbnail(item.fileObj, item.img, item.badge);
-        });
-      }
-    } else {
-      resetApp();
-    }
-  });
-
-  async function handleActionClick() {
-    if (!isProcessed) {
-      await processAllImages();
-    }
-  }
-
+  /* ------------------------------------------------------------------ *
+   * Processing
+   * ------------------------------------------------------------------ */
   async function processAllImages() {
-    if (selectedFiles.length === 0) return;
-    loader.style.display = 'flex';
+    if (selectedFiles.length === 0 || isBusy) return;
+    isBusy = true;
     processedFilesCache = [];
+    const failures = [];
+    const usedNames = new Set();
+    const total = selectedFiles.length;
+
+    showProgress('Resizing images…');
+    setProgress(0, total);
+    await nextFrame();
 
     try {
-      for (let i = 0; i < selectedFiles.length; i++) {
+      for (let i = 0; i < total; i++) {
         const fileObj = selectedFiles[i];
-        loaderText.innerText = `Processing ${i + 1} of ${selectedFiles.length}...`;
-        await new Promise(r => setTimeout(r, 16));
+        if (fileObj.el) fileObj.el.classList.remove('is-failed');
+        if (fileObj.badge && fileObj.badge.textContent === 'FAILED') fileObj.badge.textContent = fileObj.extLabel || '';
 
-        const isHeic = fileObj.isHeic;
-        let targetMime = currentFormat === 'original' ? fileObj.type : 'image/jpeg';
-        if (!targetMime || isHeic || targetMime.includes('heic') || targetMime.includes('heif')) {
-          targetMime = 'image/jpeg';
+        try {
+          const file = await convertOne(fileObj, i, usedNames);
+          processedFilesCache.push(file);
+        } catch (err) {
+          console.error('Conversion failed:', fileObj.name, err);
+          failures.push({ name: fileObj.name, message: err && err.message ? err.message : String(err) });
+          if (fileObj.el) fileObj.el.classList.add('is-failed');
+          if (fileObj.badge) fileObj.badge.textContent = 'FAILED';
         }
 
-        let finalBlob = null;
-        const sourceBlob = fileObj.file;
-
-        if (isHeic) {
-          const buffer = await sourceBlob.arrayBuffer();
-          const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
-
-          const targetW = Math.max(1, Math.round(width * currentScale));
-          const targetH = Math.max(1, Math.round(height * currentScale));
-
-          const scaledCanvas = document.createElement('canvas');
-          scaledCanvas.width = targetW;
-          scaledCanvas.height = targetH;
-
-          const sCtx = scaledCanvas.getContext('2d');
-          sCtx.imageSmoothingEnabled = true;
-          sCtx.imageSmoothingQuality = 'high';
-          sCtx.drawImage(canvas, 0, 0, targetW, targetH);
-
-          finalBlob = await new Promise(res => scaledCanvas.toBlob(res, targetMime, 0.88));
-
-          canvas.width = 0; canvas.height = 0;
-          scaledCanvas.width = 0; scaledCanvas.height = 0;
-        } else {
-          const headerBmp = await createImageBitmap(sourceBlob);
-          const targetW = Math.max(1, Math.round(headerBmp.width * currentScale));
-          const targetH = Math.max(1, Math.round(headerBmp.height * currentScale));
-          headerBmp.close();
-
-          const resizedBmp = await createImageBitmap(sourceBlob, {
-            resizeWidth: targetW,
-            resizeHeight: targetH,
-            resizeQuality: 'high'
-          });
-
-          const canvas = document.createElement('canvas');
-          canvas.width = targetW;
-          canvas.height = targetH;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(resizedBmp, 0, 0);
-          resizedBmp.close();
-
-          finalBlob = await new Promise(res => canvas.toBlob(res, targetMime, 0.88));
-          canvas.width = 0; canvas.height = 0;
-        }
-
-        let ext = targetMime.split('/')[1] || 'jpg';
-        if (ext === 'jpeg') ext = 'jpg';
-        const baseName = fileObj.name.substring(0, fileObj.name.lastIndexOf('.')) || fileObj.name;
-        const newFileName = `${baseName}_${Math.round(currentScale * 100)}.${ext}`;
-
-        processedFilesCache.push(new File([finalBlob], newFileName, { type: targetMime }));
+        setProgress(i + 1, total);
+        await nextFrame();
       }
 
-      loader.style.display = 'none';
-      isProcessed = true;
+      hideProgress();
 
+      if (processedFilesCache.length === 0) {
+        alert(`None of the ${total} images could be converted.\n\nFirst problem: ${failures[0] ? failures[0].message : 'unknown error'}`);
+        invalidateProcessedCache();
+        return;
+      }
+
+      isProcessed = true;
       const totalConvertedSize = processedFilesCache.reduce((acc, f) => acc + f.size, 0);
-      updateSizeStats(totalOriginalSize, totalConvertedSize);
+      const doneOriginal = selectedFiles
+        .filter(f => !failures.some(x => x.name === f.name))
+        .reduce((acc, f) => acc + f.size, 0);
+      updateSizeStats(doneOriginal, totalConvertedSize);
 
       singleActionContainer.style.display = 'none';
       dualActionContainer.style.display = 'grid';
 
+      if (failures.length) {
+        const names = failures.slice(0, 5).map(f => `• ${f.name}`).join('\n');
+        const more = failures.length > 5 ? `\n…and ${failures.length - 5} more` : '';
+        alert(`${processedFilesCache.length} of ${total} images are ready.\n\nSkipped:\n${names}${more}`);
+      }
     } catch (error) {
-      loader.style.display = 'none';
-      alert("Error during image processing: " + error.message);
+      hideProgress();
+      alert('Something went wrong while resizing: ' + (error && error.message ? error.message : error));
+    } finally {
+      isBusy = false;
     }
   }
 
-  async function downloadAllZip() {
-    if (processedFilesCache.length === 0) return;
+  async function convertOne(fileObj, position, usedNames) {
+    const isHeic = fileObj.isHeic;
 
-    loader.style.display = 'flex';
-    loaderText.innerText = 'Creating ZIP archive...';
-    await new Promise(r => setTimeout(r, 16));
+    let targetMime = currentFormat === 'original' ? fileObj.type : 'image/jpeg';
+    if (!targetMime || isHeic || /hei[cf]/.test(targetMime)) targetMime = 'image/jpeg';
+    // Canvas can only encode these; anything else falls back to JPEG.
+    if (!/^image\/(jpeg|png|webp)$/.test(targetMime)) targetMime = 'image/jpeg';
+
+    const opaque = targetMime === 'image/jpeg';
+    let finalBlob = null;
+
+    if (isHeic) {
+      const buffer = await fileObj.file.arrayBuffer();
+      const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
+      const target = computeTarget(width, height);
+
+      const scaled = paintToCanvas(canvas, target.w, target.h, opaque);
+      finalBlob = await canvasToBlob(scaled, targetMime, 0.88);
+
+      canvas.width = 0; canvas.height = 0;
+      scaled.width = 0; scaled.height = 0;
+    } else {
+      const probe = await createImageBitmap(fileObj.file);
+      const target = computeTarget(probe.width, probe.height);
+      probe.close();
+
+      let bitmap;
+      try {
+        bitmap = await createImageBitmap(fileObj.file, {
+          resizeWidth: target.w,
+          resizeHeight: target.h,
+          resizeQuality: 'high'
+        });
+      } catch (e) {
+        bitmap = await createImageBitmap(fileObj.file);
+      }
+
+      const canvas = paintToCanvas(bitmap, target.w, target.h, opaque);
+      bitmap.close();
+
+      finalBlob = await canvasToBlob(canvas, targetMime, 0.88);
+      canvas.width = 0; canvas.height = 0;
+    }
+
+    if (!finalBlob) throw new Error('The browser could not encode this image.');
+
+    const ext = extFromMime(targetMime);
+    const name = makeUnique(
+      buildFileName(stripExt(fileObj.name), fileObj.file.lastModified, position, ext),
+      usedNames
+    );
+    return new File([finalBlob], name, { type: targetMime });
+  }
+
+  function canvasToBlob(canvas, mime, quality) {
+    return new Promise((resolve, reject) => {
+      try {
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Encoding returned no data.')), mime, quality);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Output
+   * ------------------------------------------------------------------ */
+  async function downloadAllZip() {
+    if (processedFilesCache.length === 0 || isBusy) return;
+    if (typeof JSZip !== 'function') {
+      alert('The ZIP library is not loaded. Reconnect once so it can be cached for offline use.');
+      return;
+    }
+    isBusy = true;
+    showProgress('Building ZIP archive…');
+    setProgress(0, 100, '');
+    await nextFrame();
 
     try {
       const zip = new JSZip();
-      processedFilesCache.forEach(file => {
-        zip.file(file.name, file);
+      processedFilesCache.forEach(file => zip.file(file.name, file));
+
+      const zipContent = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+        const pct = Math.round(metadata.percent);
+        progressFill.style.width = pct + '%';
+        progressLabel.textContent = `${pct}% complete — packing ${processedFilesCache.length} images`;
       });
 
-      const zipContent = await zip.generateAsync({ type: "blob" });
       const downloadUrl = URL.createObjectURL(zipContent);
-
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `QuickShare_${Math.round(currentScale * 100)}pct.zip`;
+      a.download = `${naming.prefix ? sanitizeNamePart(naming.prefix) : 'QuickShare'}_${sizeTag()}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-
       setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
     } catch (err) {
-      alert("Failed to build ZIP archive: " + err.message);
+      alert('The ZIP archive could not be built: ' + (err && err.message ? err.message : err));
     } finally {
-      loader.style.display = 'none';
+      hideProgress();
+      isBusy = false;
+    }
+  }
+
+  /* Can this device hand files to another app? Desktops usually cannot. */
+  function canShareFiles() {
+    try {
+      if (!navigator.share || !navigator.canShare) return false;
+      const pixel = Uint8Array.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+        0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+        0x42, 0x60, 0x82
+      ]);
+      const probe = new File([new Blob([pixel], { type: 'image/png' })], 'probe.png', { type: 'image/png' });
+      return navigator.canShare({ files: [probe] });
+    } catch (e) {
+      return false;
     }
   }
 
@@ -845,25 +1838,229 @@
         });
       } catch (err) {
         if (err.name !== 'AbortError') {
-          alert(`Sharing failed: ${err.message}\n\nPlease try downloading as ZIP instead.`);
+          alert(`Sharing failed: ${err.message}\n\nDownload the ZIP instead.`);
         }
       }
+      return;
+    }
+
+    let reason = 'This device cannot hand files to another app.';
+    if (supportsFileShare && !withinFileLimit) {
+      reason = `Too many images to share at once (${processedFilesCache.length}).`;
+    } else if (supportsFileShare && !withinSizeLimit) {
+      reason = `The batch is too large to share (${(totalBytes / (1024 * 1024)).toFixed(1)} MB).`;
+    }
+    alert(`${reason}\n\nDownload the ZIP instead.`);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Drag and drop
+   * ------------------------------------------------------------------ */
+  function dragHasFiles(e) {
+    const dt = e.dataTransfer;
+    if (!dt) return false;
+    if (dt.types) {
+      return Array.prototype.indexOf.call(dt.types, 'Files') !== -1;
+    }
+    return true;
+  }
+
+  let dragDepth = 0;
+
+  function showDropOverlay() {
+    if (isFinePointer) dropOverlay.classList.add('visible');
+  }
+
+  function hideDropOverlay() {
+    dragDepth = 0;
+    dropOverlay.classList.remove('visible');
+    dropZone.classList.remove('is-dragging');
+  }
+
+  window.addEventListener('dragenter', (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    showDropOverlay();
+  });
+
+  window.addEventListener('dragover', (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();                       // without this the browser opens the file
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    showDropOverlay();
+  });
+
+  window.addEventListener('dragleave', (e) => {
+    if (dragDepth === 0) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    // Leaving the window entirely reports no related target.
+    if (dragDepth === 0 || !e.relatedTarget) hideDropOverlay();
+  });
+
+  window.addEventListener('drop', (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    hideDropOverlay();
+    if (isBusy) return;
+    const files = e.dataTransfer ? e.dataTransfer.files : null;
+    if (files && files.length) addFiles(files);
+  });
+
+  // The drop zone itself highlights on hover, and accepts drops directly.
+  dropZone.addEventListener('dragover', (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    dropZone.classList.add('is-dragging');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('is-dragging'));
+  dropZone.addEventListener('drop', (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    hideDropOverlay();
+    if (isBusy) return;
+    const files = e.dataTransfer ? e.dataTransfer.files : null;
+    if (files && files.length) addFiles(files);
+  });
+
+  /* ------------------------------------------------------------------ *
+   * Settings sheet
+   * ------------------------------------------------------------------ */
+  function openSettings() {
+    updateNamePreview();
+    settingsSheet.hidden = false;
+  }
+
+  function closeSettings() {
+    settingsSheet.hidden = true;
+  }
+
+  function setCustomMode(mode) {
+    customMode = mode;
+    customModeSeg.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.dataset.cmode === mode);
+    });
+    customPercentRow.hidden = mode !== 'percent';
+    customPixelRow.hidden = mode !== 'pixels';
+    if (isCustomActive()) applyCustomValues();
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Wiring
+   * ------------------------------------------------------------------ */
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', (e) => {
+    addFiles(e.target.files);
+    fileInput.value = '';                     // lets the same file be picked again
+  });
+
+  sizeGroup.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-option');
+    if (!btn) return;
+    if (btn.dataset.role === 'custom') activateCustom();
+    else setPresetScale(parseFloat(btn.dataset.scale), btn);
+  });
+
+  formatGroup.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-option');
+    if (btn) setFormat(btn.dataset.format, btn);
+  });
+
+  customModeSeg.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (btn) setCustomMode(btn.dataset.cmode);
+  });
+
+  [customPercent, customWidth, customHeight].forEach(input => {
+    input.addEventListener('input', () => { if (isCustomActive()) applyCustomValues(); });
+    input.addEventListener('change', () => { if (isCustomActive()) applyCustomValues(); });
+  });
+
+  document.getElementById('themeBtn').addEventListener('click', cycleTheme);
+  document.getElementById('settingsBtn').addEventListener('click', openSettings);
+  document.getElementById('refreshBtn').addEventListener('click', resetApp);
+  document.getElementById('sheetCloseBtn').addEventListener('click', closeSettings);
+  document.getElementById('sheetDoneBtn').addEventListener('click', closeSettings);
+  document.getElementById('sheetBackdrop').addEventListener('click', closeSettings);
+  document.getElementById('sheetResetBtn').addEventListener('click', () => {
+    naming = Object.assign({}, DEFAULT_NAMING);
+    store('qs_naming', naming);
+    writeNamingToForm();
+    invalidateProcessedCache();
+  });
+
+  ['setPrefix', 'setSuffix', 'setKeepName', 'setUseDate', 'setUseIndex', 'setStart', 'setDigits', 'setSep']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', readNamingFromForm);
+      el.addEventListener('change', readNamingFromForm);
+    });
+
+  actionButton.addEventListener('click', () => { if (!isProcessed) processAllImages(); });
+  zipButton.addEventListener('click', downloadAllZip);
+  shareButton.addEventListener('click', shareNow);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !settingsSheet.hidden) closeSettings();
+  });
+
+  /* PWA install prompt (Chromium). iOS uses Safari's Add to Home Screen. */
+  let deferredInstall = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstall = e;
+    document.getElementById('installBtn').hidden = false;
+  });
+  document.getElementById('installBtn').addEventListener('click', async () => {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null;
+    document.getElementById('installBtn').hidden = true;
+  });
+  window.addEventListener('appinstalled', () => {
+    document.getElementById('installBtn').hidden = true;
+  });
+
+  /* ------------------------------------------------------------------ *
+   * Start-up
+   * ------------------------------------------------------------------ */
+  function boot() {
+    const savedTheme = read('qs_theme');
+    if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'auto') themePref = savedTheme;
+    applyTheme();
+
+    loadNaming();
+    resetApp();
+
+    if (isFinePointer) {
+      dropZoneText.textContent = 'Click or drop images here';
+      emptyState.innerHTML = 'No images yet.<br>Drop them anywhere on this window.';
     } else {
-      let reason = "Direct sharing unavailable.";
-      if (!supportsFileShare) {
-        reason = "Your browser or device does not support native file sharing.";
-      } else if (!withinFileLimit) {
-        reason = `Too many items (${processedFilesCache.length} files selected).`;
-      } else if (!withinSizeLimit) {
-        reason = `Batch size is too large (${(totalBytes / (1024 * 1024)).toFixed(1)}MB).`;
-      }
-      
-      alert(`${reason}\n\nPlease use the 'Download ZIP' option.`);
+      emptyState.textContent = 'No images selected yet';
+    }
+
+    // No share sheet on this device, so give the whole bar to the ZIP download.
+    if (!canShareFiles()) {
+      shareButton.hidden = true;
+      shareButton.style.display = 'none';
+      dualActionContainer.classList.add('single-action');
+      zipButton.classList.remove('btn-secondary');
+      zipButton.classList.add('ready-state');
+    }
+
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+          console.warn('Offline mode unavailable:', err);
+        });
+      });
     }
   }
 
-  // Ensure default state is restored on every fresh page load/reload
-  window.addEventListener('DOMContentLoaded', resetApp);
+  boot();
 </script>
 </body>
 </html>
