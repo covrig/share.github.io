@@ -270,7 +270,8 @@
     .field-row {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      gap: 10px;
       flex-wrap: wrap;
     }
 
@@ -279,8 +280,25 @@
     .field {
       display: flex;
       align-items: center;
-      gap: 6px;
-      flex: 1 1 120px;
+      justify-content: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+	
+	#customBtn {
+	  color: yellow;	
+	}
+	
+    .field input[type="number"] {
+      width: 82px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .unit {
+      font-size: 13px;
+      color: var(--text-sub);
+      font-weight: 600;
     }
 
     .field label {
@@ -311,8 +329,9 @@
       font-size: 11px;
       color: var(--text-sub);
       line-height: 1.4;
-      margin-top: 6px;
+      margin-top: 2px;
       width: 100%;
+      text-align: center;
     }
 
     .thumb-grid-container {
@@ -687,7 +706,7 @@
 
   <div class="header">
     <div>
-      <h1>QUICK SHARE v.0.7</h1>
+      <h1>QUICK SHARE v.0.8</h1>
     </div>
     <div class="header-actions">
       <button class="btn-icon" id="installBtn" hidden title="Install this app">⤓</button>
@@ -728,9 +747,8 @@
           <div class="field">
             <label for="customPercent">Scale to</label>
             <input type="number" id="customPercent" inputmode="numeric" min="1" max="400" step="1" value="25">
-            <label for="customPercent">%</label>
+            <span class="unit">%</span>
           </div>
-          <div class="hint">Any value from 1 to 400. Above 100 enlarges the image.</div>
         </div>
 
         <div class="field-row" id="customPixelRow" hidden>
@@ -742,7 +760,7 @@
             <label for="customHeight">Max H</label>
             <input type="number" id="customHeight" inputmode="numeric" min="1" max="20000" step="1" placeholder="auto">
           </div>
-          <div class="hint">Images fit inside this box and keep their aspect ratio. Leave a field empty to let that side follow. Nothing is enlarged.</div>
+          <div class="hint">Images fit inside this box and keep their aspect ratio. Leave a field empty to let that side follow.</div>
         </div>
       </div>
     </div>
@@ -1360,6 +1378,7 @@
   function invalidateProcessedCache() {
     isProcessed = false;
     processedFilesCache = [];
+    shareOffset = 0;
     singleActionContainer.style.display = 'block';
     dualActionContainer.style.display = 'none';
     actionButton.classList.remove('ready-state');
@@ -1682,6 +1701,8 @@
 
       singleActionContainer.style.display = 'none';
       dualActionContainer.style.display = 'grid';
+      shareOffset = 0;
+      updateShareButtonLabel();
 
       if (failures.length) {
         const names = failures.slice(0, 5).map(f => `• ${f.name}`).join('\n');
@@ -1818,39 +1839,84 @@
     }
   }
 
+  /*
+   * Android refuses a share with NotAllowedError once the payload gets big —
+   * it is a limit on the handover, not on this app. When that happens we drop
+   * to sending a slice at a time; each tap is its own gesture, which is what
+   * the share sheet requires. The slice size is remembered for next time.
+   */
+  let isSharing = false;
+  let shareChunkSize = 0;   // 0 means "send everything in one go"
+  let shareOffset = 0;
+
+  function shareSlice() {
+    const all = processedFilesCache;
+    if (shareOffset >= all.length) shareOffset = 0;
+    return shareChunkSize > 0 ? all.slice(shareOffset, shareOffset + shareChunkSize) : all.slice();
+  }
+
+  function updateShareButtonLabel() {
+    const total = processedFilesCache.length;
+    if (shareChunkSize > 0 && total > shareChunkSize) {
+      const from = shareOffset + 1;
+      const to = Math.min(shareOffset + shareChunkSize, total);
+      shareButton.textContent = `📤 Share ${from}–${to} of ${total}`;
+    } else {
+      shareButton.textContent = '📤 Share';
+    }
+  }
+
   async function shareNow() {
-    if (processedFilesCache.length === 0) return;
+    if (processedFilesCache.length === 0 || isSharing) return;
 
-    const totalBytes = processedFilesCache.reduce((acc, f) => acc + f.size, 0);
-    const maxShareFiles = 50;
-    const maxShareBytes = 100 * 1024 * 1024; // 100 MB
+    const chunk = shareSlice();
+    const totalBytes = chunk.reduce((acc, f) => acc + f.size, 0);
 
-    const supportsFileShare = !!(navigator.canShare && navigator.canShare({ files: processedFilesCache }));
-    const withinFileLimit = processedFilesCache.length <= maxShareFiles;
-    const withinSizeLimit = totalBytes <= maxShareBytes;
-
-    if (supportsFileShare && withinFileLimit && withinSizeLimit) {
-      try {
-        await navigator.share({
-          files: processedFilesCache,
-          title: 'Resized Images',
-          text: 'Here are your resized images.'
-        });
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          alert(`Sharing failed: ${err.message}\n\nDownload the ZIP instead.`);
-        }
-      }
+    if (!navigator.share || !navigator.canShare || !navigator.canShare({ files: chunk })) {
+      alert('This device cannot hand files to another app.\n\nDownload the ZIP instead.');
+      return;
+    }
+    if (totalBytes > 100 * 1024 * 1024) {
+      alert(`This batch is ${(totalBytes / (1024 * 1024)).toFixed(1)} MB, too large for the share sheet.\n\nDownload the ZIP instead.`);
       return;
     }
 
-    let reason = 'This device cannot hand files to another app.';
-    if (supportsFileShare && !withinFileLimit) {
-      reason = `Too many images to share at once (${processedFilesCache.length}).`;
-    } else if (supportsFileShare && !withinSizeLimit) {
-      reason = `The batch is too large to share (${(totalBytes / (1024 * 1024)).toFixed(1)} MB).`;
+    isSharing = true;
+    try {
+      // Files only: some Android targets reject a share that also carries text.
+      await navigator.share({ files: chunk });
+
+      shareOffset += chunk.length;
+      if (shareChunkSize > 0 && shareOffset < processedFilesCache.length) {
+        updateShareButtonLabel();
+      } else {
+        shareOffset = 0;
+        updateShareButtonLabel();
+      }
+    } catch (err) {
+      const name = err && err.name;
+      const message = err && err.message ? err.message : String(err);
+
+      if (name === 'AbortError') {
+        // The user backed out of the share sheet. Nothing to say.
+      } else if (name === 'NotAllowedError' || /permission denied|not allowed/i.test(message)) {
+        if (chunk.length > 1) {
+          shareChunkSize = shareChunkSize === 0
+            ? Math.max(1, Math.min(10, Math.ceil(chunk.length / 2)))
+            : Math.max(1, Math.floor(shareChunkSize / 2));
+          shareOffset = 0;
+          store('qs_share_chunk', String(shareChunkSize));
+          updateShareButtonLabel();
+          alert(`Android would not take ${chunk.length} images at once.\n\nTap Share again to send them ${shareChunkSize} at a time, or download the ZIP.`);
+        } else {
+          alert('Android refused the share.\n\nDownload the ZIP instead.');
+        }
+      } else {
+        alert(`Sharing failed: ${message}\n\nDownload the ZIP instead.`);
+      }
+    } finally {
+      isSharing = false;
     }
-    alert(`${reason}\n\nDownload the ZIP instead.`);
   }
 
   /* ------------------------------------------------------------------ *
@@ -2031,6 +2097,9 @@
     const savedTheme = read('qs_theme');
     if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'auto') themePref = savedTheme;
     applyTheme();
+
+    const savedChunk = parseInt(read('qs_share_chunk'), 10);
+    if (isFinite(savedChunk) && savedChunk > 0) shareChunkSize = savedChunk;
 
     loadNaming();
     resetApp();
