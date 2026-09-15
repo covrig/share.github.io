@@ -1,5 +1,5 @@
 /* Quick Share service worker — offline app shell */
-const VERSION = 'quickshare-v7';
+const VERSION = 'quickshare-v0.8';
 const CORE = [
   './',
   './index.html',
