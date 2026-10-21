@@ -1,5 +1,5 @@
 /* Quick Share service worker — offline app shell */
-const VERSION = 'quickshare-v9';
+const VERSION = 'quickshare-v9.5';
 const CORE = [
   './',
   './image_converter_share.html',
