@@ -710,7 +710,7 @@
 
   <div class="header">
     <div>
-      <h1>QUICK SHARE v.0.9</h1>
+      <h1>QUICK SHARE v.0.95</h1>
     </div>
     <div class="header-actions">
       <button class="btn-icon" id="installBtn" hidden title="Install this app">⤓</button>
@@ -1279,8 +1279,8 @@
               png: 'png', webp: 'webp', gif: 'gif', avif: 'avif' })[m[1].toLowerCase()] || null;
   }
 
-  async function sniffKind(file) {
-    const buf = new Uint8Array(await file.slice(0, 512).arrayBuffer());
+  function sniffBytes(bytes) {
+    const buf = bytes.subarray(0, 512);
     const asc = (a, b) => String.fromCharCode.apply(null, buf.subarray(a, b));
     if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return { kind: 'jpeg', mime: 'image/jpeg' };
     if (buf[0] === 0x89 && asc(1, 4) === 'PNG') return { kind: 'png', mime: 'image/png' };
@@ -1305,8 +1305,13 @@
     const incoming = Array.from(fileList || []).filter(looksLikeImage);   // snapshot before any await
     if (incoming.length === 0) return;
 
-    const sniffed = await Promise.all(incoming.map(f =>
-      sniffKind(f).catch(() => ({ kind: 'unknown', mime: '' }))));
+    // Copy every file's bytes into memory right away. After this the page never has to
+    // touch the original file handle again, so a cleared <input>, a cloud-synced or
+    // since-modified file, or revoked permissions can no longer break conversion later.
+    const buffers = await Promise.all(incoming.map(f =>
+      f.arrayBuffer().catch(() => null)));
+    const sniffed = buffers.map(buf =>
+      buf ? sniffBytes(new Uint8Array(buf, 0, Math.min(512, buf.byteLength))) : { kind: 'unknown', mime: '' });
 
     let added = 0;
     incoming.forEach((rawFile, k) => {
@@ -1326,9 +1331,10 @@
       const note = (s.kind !== 'unknown' && declared && declared !== s.kind)
         ? `Actually ${KIND_LABEL[s.kind]}, not ${KIND_LABEL[declared]}` : '';
 
-      // Give the browser a Blob whose MIME type matches the real content.
-      const src = (s.kind !== 'unknown' && rawFile.type !== type)
-        ? rawFile.slice(0, rawFile.size, type) : rawFile;
+      // In-memory copy with a MIME type that matches the real content.
+      // (Falls back to the original handle only if the early read failed.)
+      const src = buffers[k] ? new Blob([buffers[k]], { type: type || '' }) : rawFile;
+      buffers[k] = null;
 
       const fileObj = {
         id: ++fileIdSeq,
@@ -1685,7 +1691,7 @@
   async function loadHeicThumbnail(fileObj) {
     if (!fileObj.img || !fileObj.el || !fileObj.el.isConnected) return;
     try {
-      const buffer = await fileObj.file.arrayBuffer();
+      const buffer = await fileObj.src.arrayBuffer();
       const thumbCanvas = await decodeHeicForThumbnail(buffer, 240);
       await new Promise(resolve => {
         thumbCanvas.toBlob(blob => {
@@ -1785,7 +1791,7 @@
     let finalBlob = null;
 
     if (isHeic) {
-      const buffer = await fileObj.file.arrayBuffer();
+      const buffer = await fileObj.src.arrayBuffer();
       const { canvas, width, height } = await decodeHeicBufferToCanvas(buffer);
       const target = computeTarget(width, height);
 
@@ -2073,9 +2079,10 @@
    * ------------------------------------------------------------------ */
   dropZone.addEventListener('click', () => fileInput.click());
 
-  fileInput.addEventListener('change', (e) => {
-    addFiles(e.target.files);
-    fileInput.value = '';                     // lets the same file be picked again
+  fileInput.addEventListener('change', async (e) => {
+    const picked = Array.from(e.target.files || []);
+    try { await addFiles(picked); }
+    finally { fileInput.value = ''; }         // lets the same file be picked again
   });
 
   sizeGroup.addEventListener('click', (e) => {
